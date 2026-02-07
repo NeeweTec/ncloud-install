@@ -7,7 +7,6 @@
     "ncloud-agent": "./dist/linux/cli.js",
     "ncloud-daemon": "./dist/linux/daemon.js"
   },
-  "type": "module",
   "engines": {
     "node": ">=20.0.0"
   },
