@@ -12,47 +12,52 @@ set -o pipefail
 # CONFIGURACAO
 # ==============================================================================
 
-readonly VERSION="1.3.0"
-readonly AGENT_VERSION="1.3.0"
+# Usar nome diferente para evitar conflito com /etc/os-release
+INSTALLER_VERSION="1.3.0"
+AGENT_VERSION="1.3.0"
 
 # Cores ANSI
-readonly RST='\033[0m'
-readonly BOLD='\033[1m'
-readonly DIM='\033[2m'
+RST=$'\033[0m'
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
 
-readonly RED='\033[31m'
-readonly GREEN='\033[32m'
-readonly YELLOW='\033[33m'
-readonly BLUE='\033[34m'
-readonly CYAN='\033[36m'
-readonly WHITE='\033[37m'
-readonly GRAY='\033[90m'
-readonly MAGENTA='\033[35m'
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+BLUE=$'\033[34m'
+CYAN=$'\033[36m'
+WHITE=$'\033[37m'
+GRAY=$'\033[90m'
+MAGENTA=$'\033[35m'
 
 # Diretorios
-readonly INSTALL_DIR="/opt/ncloud-agent"
-readonly CONFIG_DIR="/etc/ncloud-agent"
-readonly LOG_DIR="/var/log/ncloud-agent"
-readonly SERVICE_NAME="ncloud-agent"
+INSTALL_DIR="/opt/ncloud-agent"
+CONFIG_DIR="/etc/ncloud-agent"
+LOG_DIR="/var/log/ncloud-agent"
+SERVICE_NAME="ncloud-agent"
 
 # URLs
-readonly DOWNLOAD_URL="https://get.neewecloud.com/releases/v${AGENT_VERSION}/ncloud-agent-linux-x64-v${AGENT_VERSION}.tar.gz"
+DOWNLOAD_URL="https://get.neewecloud.com/releases/v${AGENT_VERSION}/ncloud-agent-linux-x64-v${AGENT_VERSION}.tar.gz"
 
 # Requisitos
-readonly MIN_NODE_VERSION="20"
+MIN_NODE_VERSION="20"
+
+# Variaveis para resultado final
+SAVED_TOKEN=""
+SAVED_PORT=""
 
 # ==============================================================================
 # FUNCOES DE UI
 # ==============================================================================
 
 print_line() {
-    printf "${GRAY}%s${RST}\n" "────────────────────────────────────────────────────────────────────────────────"
+    echo "${GRAY}────────────────────────────────────────────────────────────────────────────────${RST}"
 }
 
 print_header() {
     clear
     echo ""
-    printf "${CYAN}"
+    echo "${CYAN}"
     cat << 'EOF'
     ╔═══════════════════════════════════════════════════════════════════════════╗
     ║                                                                           ║
@@ -65,10 +70,10 @@ print_header() {
     ║                                                                           ║
     ╚═══════════════════════════════════════════════════════════════════════════╝
 EOF
-    printf "${RST}"
+    echo "${RST}"
     echo ""
-    printf "  ${BOLD}${WHITE}AGENT INSTALLER${RST} ${GRAY}|${RST} v${VERSION} ${GRAY}|${RST} Protheus Service Manager\n"
-    printf "  ${GRAY}NEEWE Tecnologia${RST}\n"
+    echo "  ${BOLD}${WHITE}AGENT INSTALLER${RST} ${GRAY}|${RST} v${INSTALLER_VERSION} ${GRAY}|${RST} Protheus Service Manager"
+    echo "  ${GRAY}NEEWE Tecnologia${RST}"
     print_line
     echo ""
 }
@@ -77,8 +82,8 @@ print_section() {
     local title="$1"
     local icon="$2"
     echo ""
-    printf "  ${BOLD}${WHITE}%s  %s${RST}\n" "$icon" "$title"
-    printf "  ${GRAY}────────────────────────────────────────${RST}\n"
+    echo "  ${BOLD}${WHITE}${icon}  ${title}${RST}"
+    echo "  ${GRAY}────────────────────────────────────────${RST}"
 }
 
 print_step() {
@@ -86,27 +91,27 @@ print_step() {
     local total="$2"
     local title="$3"
     echo ""
-    printf "  ${CYAN}[%d/%d]${RST} ${BOLD}%s${RST}\n" "$step" "$total" "$title"
+    echo "  ${CYAN}[${step}/${total}]${RST} ${BOLD}${title}${RST}"
 }
 
 msg_ok() {
-    printf "  ${GREEN}✓${RST}  %s\n" "$1"
+    echo "  ${GREEN}✓${RST}  $1"
 }
 
 msg_fail() {
-    printf "  ${RED}✗${RST}  %s\n" "$1"
+    echo "  ${RED}✗${RST}  $1"
 }
 
 msg_skip() {
-    printf "  ${YELLOW}○${RST}  %s\n" "$1"
+    echo "  ${YELLOW}○${RST}  $1"
 }
 
 msg_info() {
-    printf "  ${BLUE}ℹ${RST}  %s\n" "$1"
+    echo "  ${BLUE}ℹ${RST}  $1"
 }
 
 msg_warn() {
-    printf "  ${YELLOW}⚠${RST}  %s\n" "$1"
+    echo "  ${YELLOW}⚠${RST}  $1"
 }
 
 # Spinner
@@ -127,20 +132,26 @@ spinner_start() {
 }
 
 spinner_stop() {
-    [[ -n "$SPINNER_PID" ]] && kill "$SPINNER_PID" 2>/dev/null && wait "$SPINNER_PID" 2>/dev/null
+    if [[ -n "$SPINNER_PID" ]]; then
+        kill "$SPINNER_PID" 2>/dev/null
+        wait "$SPINNER_PID" 2>/dev/null
+    fi
     SPINNER_PID=""
     printf "\r\033[K"
 }
 
-prompt() {
+prompt_value() {
     local message="$1"
     local default="$2"
     local result=""
     
-    printf "  ${CYAN}?${RST}  %s " "$message"
-    [[ -n "$default" ]] && printf "${GRAY}[%s]${RST} " "$default"
-    printf ": "
-    read -r result
+    if [[ -n "$default" ]]; then
+        printf "  ${CYAN}?${RST}  %s [${GRAY}%s${RST}]: " "$message" "$default"
+    else
+        printf "  ${CYAN}?${RST}  %s: " "$message"
+    fi
+    
+    read -r result </dev/tty
     echo "${result:-$default}"
 }
 
@@ -150,11 +161,12 @@ confirm() {
     local result=""
     
     if [[ "$default" == "y" ]]; then
-        printf "  ${CYAN}?${RST}  %s ${GRAY}[Y/n]${RST}: " "$message"
+        printf "  ${CYAN}?${RST}  %s [${GRAY}Y/n${RST}]: " "$message"
     else
-        printf "  ${CYAN}?${RST}  %s ${GRAY}[y/N]${RST}: " "$message"
+        printf "  ${CYAN}?${RST}  %s [${GRAY}y/N${RST}]: " "$message"
     fi
-    read -r result
+    
+    read -r result </dev/tty
     result="${result:-$default}"
     [[ "$result" =~ ^[Yy]$ ]]
 }
@@ -167,7 +179,7 @@ check_root() {
     if [[ $EUID -ne 0 ]]; then
         msg_fail "Este script precisa ser executado como root"
         echo ""
-        printf "     Execute: ${CYAN}sudo bash${RST} ou ${CYAN}curl ... | sudo bash${RST}\n"
+        echo "     Execute: ${CYAN}sudo bash${RST} ou ${CYAN}curl ... | sudo bash${RST}"
         echo ""
         exit 1
     fi
@@ -176,8 +188,9 @@ check_root() {
 
 check_os() {
     if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        msg_ok "Sistema detectado: ${CYAN}$NAME${RST}"
+        # Usar subshell para não poluir namespace
+        OS_NAME=$(grep -E "^NAME=" /etc/os-release | cut -d'"' -f2)
+        msg_ok "Sistema detectado: ${CYAN}${OS_NAME}${RST}"
         return 0
     fi
     msg_fail "Sistema operacional nao suportado"
@@ -285,22 +298,26 @@ configure_agent() {
     # Gerar token
     local TOKEN=$(generate_token)
     
-    echo ""
     print_section "Configuracao Interativa" "⚙️"
     echo ""
     
     # Porta
-    local PORT=$(prompt "Porta da API" "3100")
+    local PORT=$(prompt_value "Porta da API" "3100")
+    
+    # Validar porta
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+        PORT="3100"
+    fi
     
     # Diretorios de scan
     echo ""
     msg_info "Diretorios padrao para buscar Protheus:"
-    printf "     ${GRAY}/totvs, /opt/totvs, /home/totvs${RST}\n"
+    echo "     ${GRAY}/totvs, /opt/totvs, /home/totvs${RST}"
     echo ""
     
     local CUSTOM_PATHS=""
     if confirm "Adicionar diretorios customizados" "n"; then
-        CUSTOM_PATHS=$(prompt "Diretorios adicionais (separados por virgula)" "")
+        CUSTOM_PATHS=$(prompt_value "Diretorios adicionais (separados por virgula)" "")
     fi
     
     # Montar array de paths
@@ -318,8 +335,8 @@ configure_agent() {
     local WEBHOOK_CONFIG=""
     echo ""
     if confirm "Configurar webhook para notificacoes" "n"; then
-        local WEBHOOK_URL=$(prompt "URL do webhook" "")
-        local WEBHOOK_SECRET=$(prompt "Secret do webhook (opcional)" "")
+        local WEBHOOK_URL=$(prompt_value "URL do webhook" "")
+        local WEBHOOK_SECRET=$(prompt_value "Secret do webhook (opcional)" "")
         
         if [[ -n "$WEBHOOK_URL" ]]; then
             local WEBHOOK_ID=$(openssl rand -hex 8)
@@ -403,7 +420,7 @@ EOF
     msg_ok "Servico systemd criado"
     
     # Criar CLI wrapper
-    spinner_start "Instalando CLI 'ncloud'"
+    spinner_start "Instalando CLI ncloud"
     
     cat > /usr/local/bin/ncloud << 'NCLOUD_CLI'
 #!/bin/bash
@@ -411,76 +428,124 @@ SERVICE_NAME="ncloud-agent"
 CONFIG_FILE="/etc/ncloud-agent/config.json"
 INSTALL_DIR="/opt/ncloud-agent"
 
-RST='\033[0m'; GREEN='\033[32m'; RED='\033[31m'; YELLOW='\033[33m'; CYAN='\033[36m'; BOLD='\033[1m'; GRAY='\033[90m'
+RST=$'\033[0m'
+BOLD=$'\033[1m'
+GREEN=$'\033[32m'
+RED=$'\033[31m'
+YELLOW=$'\033[33m'
+CYAN=$'\033[36m'
+GRAY=$'\033[90m'
 
-check_root() { [ "$EUID" -ne 0 ] && echo -e "  ${RED}✗${RST}  Execute: ${CYAN}sudo ncloud $1${RST}" && exit 1; }
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "  ${RED}✗${RST}  Execute: ${CYAN}sudo ncloud $1${RST}"
+        exit 1
+    fi
+}
+
+get_port() {
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]*' "$CONFIG_FILE" | head -1 | grep -o '[0-9]*' || echo "3100"
+    else
+        echo "3100"
+    fi
+}
 
 case "${1:-help}" in
     start)
         check_root start
-        echo -e "  ${CYAN}▸${RST}  Iniciando Ncloud Agent..."
+        echo "  ${CYAN}▸${RST}  Iniciando Ncloud Agent..."
         systemctl start $SERVICE_NAME
-        sleep 1
-        systemctl is-active --quiet $SERVICE_NAME && echo -e "  ${GREEN}✓${RST}  Agent iniciado" || echo -e "  ${RED}✗${RST}  Falha ao iniciar"
+        sleep 2
+        if systemctl is-active --quiet $SERVICE_NAME; then
+            echo "  ${GREEN}✓${RST}  Agent iniciado"
+        else
+            echo "  ${RED}✗${RST}  Falha ao iniciar"
+            echo ""
+            echo "  ${YELLOW}⚠${RST}  Verifique os logs: ${CYAN}ncloud logs${RST}"
+        fi
         ;;
     stop)
         check_root stop
-        echo -e "  ${CYAN}▸${RST}  Parando Ncloud Agent..."
+        echo "  ${CYAN}▸${RST}  Parando Ncloud Agent..."
         systemctl stop $SERVICE_NAME
-        echo -e "  ${GREEN}✓${RST}  Agent parado"
+        echo "  ${GREEN}✓${RST}  Agent parado"
         ;;
     restart)
         check_root restart
-        echo -e "  ${CYAN}▸${RST}  Reiniciando Ncloud Agent..."
+        echo "  ${CYAN}▸${RST}  Reiniciando Ncloud Agent..."
         systemctl restart $SERVICE_NAME
-        sleep 1
-        systemctl is-active --quiet $SERVICE_NAME && echo -e "  ${GREEN}✓${RST}  Agent reiniciado" || echo -e "  ${RED}✗${RST}  Falha ao reiniciar"
+        sleep 2
+        if systemctl is-active --quiet $SERVICE_NAME; then
+            echo "  ${GREEN}✓${RST}  Agent reiniciado"
+        else
+            echo "  ${RED}✗${RST}  Falha ao reiniciar"
+        fi
         ;;
     status|st)
         echo ""
-        echo -e "  ${BOLD}NCLOUD AGENT STATUS${RST}"
+        echo "  ${BOLD}NCLOUD AGENT STATUS${RST}"
         echo ""
-        systemctl is-active --quiet $SERVICE_NAME && echo -e "  ${GREEN}●${RST}  Servico: ${GREEN}Ativo${RST}" || echo -e "  ${RED}○${RST}  Servico: ${RED}Inativo${RST}"
-        systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null && echo -e "  ${GREEN}●${RST}  Autostart: ${GREEN}Habilitado${RST}" || echo -e "  ${YELLOW}○${RST}  Autostart: ${YELLOW}Desabilitado${RST}"
-        if [ -f "$CONFIG_FILE" ]; then
-            PORT=$(grep -o '"port":[^,}]*' "$CONFIG_FILE" | head -1 | grep -o '[0-9]*')
-            echo -e "  ${CYAN}●${RST}  Porta: ${CYAN}${PORT:-3100}${RST}"
+        if systemctl is-active --quiet $SERVICE_NAME; then
+            echo "  ${GREEN}●${RST}  Servico: ${GREEN}Ativo${RST}"
+        else
+            echo "  ${RED}○${RST}  Servico: ${RED}Inativo${RST}"
         fi
+        if systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null; then
+            echo "  ${GREEN}●${RST}  Autostart: ${GREEN}Habilitado${RST}"
+        else
+            echo "  ${YELLOW}○${RST}  Autostart: ${YELLOW}Desabilitado${RST}"
+        fi
+        PORT=$(get_port)
+        echo "  ${CYAN}●${RST}  Porta: ${CYAN}${PORT}${RST}"
         PID=$(systemctl show --property MainPID --value $SERVICE_NAME 2>/dev/null)
-        [ "$PID" != "0" ] && [ -n "$PID" ] && echo -e "  ${CYAN}●${RST}  PID: ${CYAN}$PID${RST}"
+        if [ "$PID" != "0" ] && [ -n "$PID" ]; then
+            echo "  ${CYAN}●${RST}  PID: ${CYAN}$PID${RST}"
+        fi
         IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-        [ -n "$IP" ] && echo -e "  ${CYAN}●${RST}  Acesso: ${CYAN}http://${IP}:${PORT:-3100}${RST}"
+        if [ -n "$IP" ]; then
+            echo "  ${CYAN}●${RST}  Acesso: ${CYAN}http://${IP}:${PORT}${RST}"
+        fi
         echo ""
         ;;
     logs|log|l)
-        echo -e "  ${CYAN}▸${RST}  Logs em tempo real ${GRAY}(Ctrl+C para sair)${RST}"
+        echo "  ${CYAN}▸${RST}  Logs em tempo real ${GRAY}(Ctrl+C para sair)${RST}"
         echo ""
         journalctl -u $SERVICE_NAME -f --no-hostname -o cat
         ;;
     menu|m)
         check_root menu
-        [ -f "$INSTALL_DIR/dist/linux/cli.js" ] && node "$INSTALL_DIR/dist/linux/cli.js" || echo -e "  ${RED}✗${RST}  CLI nao encontrado"
+        if [ -f "$INSTALL_DIR/dist/linux/cli.js" ]; then
+            node "$INSTALL_DIR/dist/linux/cli.js"
+        else
+            echo "  ${RED}✗${RST}  CLI nao encontrado"
+        fi
         ;;
     version|v|-v|--version)
-        [ -f "$INSTALL_DIR/package.json" ] && grep -o '"version":[^,}]*' "$INSTALL_DIR/package.json" | cut -d'"' -f4 | xargs -I{} echo -e "  Ncloud Agent ${CYAN}v{}${RST}" || echo -e "  ${YELLOW}Versao desconhecida${RST}"
+        if [ -f "$INSTALL_DIR/package.json" ]; then
+            VER=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$INSTALL_DIR/package.json" | head -1 | cut -d'"' -f4)
+            echo "  Ncloud Agent ${CYAN}v${VER}${RST}"
+        else
+            echo "  ${YELLOW}Versao desconhecida${RST}"
+        fi
         ;;
     *)
         echo ""
-        echo -e "  ${BOLD}NCLOUD${RST} - CLI do Ncloud Agent"
+        echo "  ${BOLD}NCLOUD${RST} - CLI do Ncloud Agent"
         echo ""
-        echo -e "  ${BOLD}COMANDOS:${RST}"
-        echo -e "     ${CYAN}start${RST}      Iniciar o agent"
-        echo -e "     ${CYAN}stop${RST}       Parar o agent"
-        echo -e "     ${CYAN}restart${RST}    Reiniciar o agent"
-        echo -e "     ${CYAN}status${RST}     Ver status do servico"
-        echo -e "     ${CYAN}logs${RST}       Ver logs em tempo real"
-        echo -e "     ${CYAN}menu${RST}       Abrir CLI interativo"
-        echo -e "     ${CYAN}version${RST}    Ver versao instalada"
+        echo "  ${BOLD}COMANDOS:${RST}"
+        echo "     ${CYAN}start${RST}      Iniciar o agent"
+        echo "     ${CYAN}stop${RST}       Parar o agent"
+        echo "     ${CYAN}restart${RST}    Reiniciar o agent"
+        echo "     ${CYAN}status${RST}     Ver status do servico"
+        echo "     ${CYAN}logs${RST}       Ver logs em tempo real"
+        echo "     ${CYAN}menu${RST}       Abrir CLI interativo"
+        echo "     ${CYAN}version${RST}    Ver versao instalada"
         echo ""
-        echo -e "  ${BOLD}EXEMPLOS:${RST}"
-        echo -e "     ${GRAY}sudo ncloud start${RST}"
-        echo -e "     ${GRAY}ncloud status${RST}"
-        echo -e "     ${GRAY}ncloud logs${RST}"
+        echo "  ${BOLD}EXEMPLOS:${RST}"
+        echo "     ${GRAY}sudo ncloud start${RST}"
+        echo "     ${GRAY}ncloud status${RST}"
+        echo "     ${GRAY}ncloud logs${RST}"
         echo ""
         ;;
 esac
@@ -519,7 +584,7 @@ show_success() {
     echo ""
     print_line
     echo ""
-    printf "${GREEN}"
+    echo "${GREEN}"
     cat << 'EOF'
     ╔═══════════════════════════════════════════════════════════════════════════╗
     ║                                                                           ║
@@ -527,29 +592,29 @@ show_success() {
     ║                                                                           ║
     ╚═══════════════════════════════════════════════════════════════════════════╝
 EOF
-    printf "${RST}"
+    echo "${RST}"
     
     print_section "Token de Autenticacao" "🔑"
     echo ""
-    printf "     ${CYAN}%s${RST}\n" "$SAVED_TOKEN"
+    echo "     ${CYAN}${SAVED_TOKEN}${RST}"
     echo ""
     msg_warn "Guarde este token em local seguro!"
     msg_info "Voce precisara dele para conectar ao Ncloud Dashboard"
     
     print_section "Dados de Conexao" "📡"
     echo ""
-    printf "     Host:   ${CYAN}%s${RST}\n" "$LOCAL_IP"
-    printf "     Porta:  ${CYAN}%s${RST}\n" "$SAVED_PORT"
-    printf "     URL:    ${CYAN}http://%s:%s${RST}\n" "$LOCAL_IP" "$SAVED_PORT"
+    echo "     Host:   ${CYAN}${LOCAL_IP}${RST}"
+    echo "     Porta:  ${CYAN}${SAVED_PORT}${RST}"
+    echo "     URL:    ${CYAN}http://${LOCAL_IP}:${SAVED_PORT}${RST}"
     
     print_section "Comandos Rapidos" "⚡"
     echo ""
-    printf "     ${CYAN}ncloud start${RST}      Iniciar o agent\n"
-    printf "     ${CYAN}ncloud stop${RST}       Parar o agent\n"
-    printf "     ${CYAN}ncloud restart${RST}    Reiniciar o agent\n"
-    printf "     ${CYAN}ncloud status${RST}     Ver status\n"
-    printf "     ${CYAN}ncloud logs${RST}       Ver logs em tempo real\n"
-    printf "     ${CYAN}ncloud menu${RST}       Abrir CLI interativo\n"
+    echo "     ${CYAN}ncloud start${RST}      Iniciar o agent"
+    echo "     ${CYAN}ncloud stop${RST}       Parar o agent"
+    echo "     ${CYAN}ncloud restart${RST}    Reiniciar o agent"
+    echo "     ${CYAN}ncloud status${RST}     Ver status"
+    echo "     ${CYAN}ncloud logs${RST}       Ver logs em tempo real"
+    echo "     ${CYAN}ncloud menu${RST}       Abrir CLI interativo"
     
     print_section "Proximos Passos" "🚀"
     echo ""
@@ -559,8 +624,8 @@ EOF
     
     echo ""
     print_line
-    printf "  ${GRAY}Documentacao:${RST} ${CYAN}https://docs.neewecloud.com${RST}\n"
-    printf "  ${GRAY}Suporte:${RST}      ${CYAN}suporte@neewe.com.br${RST}\n"
+    echo "  ${GRAY}Documentacao:${RST} ${CYAN}https://docs.neewecloud.com${RST}"
+    echo "  ${GRAY}Suporte:${RST}      ${CYAN}suporte@neewe.com.br${RST}"
     print_line
     echo ""
 }
@@ -624,7 +689,7 @@ uninstall() {
     
     echo ""
     print_line
-    printf "  ${GREEN}✓${RST}  ${BOLD}Ncloud Agent desinstalado com sucesso!${RST}\n"
+    echo "  ${GREEN}✓${RST}  ${BOLD}Ncloud Agent desinstalado com sucesso!${RST}"
     print_line
     echo ""
 }
@@ -638,21 +703,21 @@ show_help() {
     
     print_section "Uso" "📖"
     echo ""
-    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash\n"
-    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- ${CYAN}[opcoes]${RST}\n"
+    echo "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash"
+    echo "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- ${CYAN}[opcoes]${RST}"
     
     print_section "Opcoes" "⚙️"
     echo ""
-    printf "     ${CYAN}--uninstall${RST}    Desinstalar o agent\n"
-    printf "     ${CYAN}--help${RST}         Mostrar esta ajuda\n"
+    echo "     ${CYAN}--uninstall${RST}    Desinstalar o agent"
+    echo "     ${CYAN}--help${RST}         Mostrar esta ajuda"
     
     print_section "Exemplos" "💡"
     echo ""
-    printf "     ${GRAY}# Instalacao interativa${RST}\n"
-    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash\n"
+    echo "     ${GRAY}# Instalacao interativa${RST}"
+    echo "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash"
     echo ""
-    printf "     ${GRAY}# Desinstalar${RST}\n"
-    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- --uninstall\n"
+    echo "     ${GRAY}# Desinstalar${RST}"
+    echo "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- --uninstall"
     
     echo ""
     print_line
@@ -666,7 +731,7 @@ show_help() {
 cleanup() {
     spinner_stop
     echo ""
-    printf "  ${YELLOW}⚠${RST}  ${YELLOW}Instalacao interrompida${RST}\n"
+    echo "  ${YELLOW}⚠${RST}  ${YELLOW}Instalacao interrompida${RST}"
     echo ""
     exit 130
 }
