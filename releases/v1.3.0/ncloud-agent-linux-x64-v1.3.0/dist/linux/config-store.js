@@ -142,17 +142,37 @@ class DaemonConfigStore extends events_1.EventEmitter {
                 // Migra environments antigos que não têm ID
                 const environments = this.migrateEnvironments(loaded.environments || []);
                 const needsMigration = environments.some((env, i) => !loaded.environments?.[i]?.id || !loaded.environments?.[i]?.createdAt);
+                // CRÍTICO: Preserva o token do arquivo - NUNCA usar default se existir token no arquivo
+                const fileToken = loaded.auth?.token;
+                const fileTokenHash = loaded.auth?.tokenHash;
+                // Se existe um token no arquivo E é diferente do default, usa o do arquivo
+                const auth = fileToken && fileToken !== DEFAULT_CONFIG.auth.token
+                    ? { token: fileToken, tokenHash: fileTokenHash || this.hashToken(fileToken) }
+                    : fileToken
+                        ? { token: fileToken, tokenHash: fileTokenHash || this.hashToken(fileToken) }
+                        : { token: this.generateSecureToken(), tokenHash: undefined }; // Gera novo se não existir
+                // Adiciona hash se não tiver
+                if (!auth.tokenHash) {
+                    auth.tokenHash = this.hashToken(auth.token);
+                }
+                console.log(`🔑 Token carregado: ${auth.token.substring(0, 8)}...`);
                 const config = {
                     ...DEFAULT_CONFIG,
                     ...loaded,
+                    auth, // Usa SEMPRE o token do arquivo (ou novo gerado)
                     instances: loaded.instances || [],
                     environments,
                     webhooks: loaded.webhooks || [],
                     monitor: { ...DEFAULT_CONFIG.monitor, ...loaded.monitor },
                 };
-                // Salva automaticamente se houve migração
-                if (needsMigration && environments.length > 0) {
-                    console.log(`🔄 Migrando ${environments.length} environment(s) para novo formato com ID`);
+                // Salva automaticamente se houve migração OU se gerou novo token
+                if ((needsMigration && environments.length > 0) || !fileToken) {
+                    if (!fileToken) {
+                        console.log(`🔑 Novo token gerado automaticamente`);
+                    }
+                    if (needsMigration && environments.length > 0) {
+                        console.log(`🔄 Migrando ${environments.length} environment(s) para novo formato com ID`);
+                    }
                     this.isDirty = true;
                 }
                 return config;
@@ -160,8 +180,33 @@ class DaemonConfigStore extends events_1.EventEmitter {
         }
         catch (error) {
             console.error('Erro ao carregar configuração:', error);
+            // Em caso de erro, tenta ler o token existente do arquivo para não perdê-lo
+            try {
+                const rawData = fs.readFileSync(this.configPath, 'utf-8');
+                const tokenMatch = rawData.match(/"token"\s*:\s*"([^"]+)"/);
+                if (tokenMatch && tokenMatch[1] && tokenMatch[1] !== DEFAULT_CONFIG.auth.token) {
+                    console.log('⚠️ Erro no JSON mas token preservado');
+                    return {
+                        ...DEFAULT_CONFIG,
+                        auth: { token: tokenMatch[1], tokenHash: this.hashToken(tokenMatch[1]) }
+                    };
+                }
+            }
+            catch { }
         }
-        return { ...DEFAULT_CONFIG };
+        // Se não existe arquivo, gera um token seguro novo
+        const newToken = this.generateSecureToken();
+        console.log(`🔑 Gerando novo token: ${newToken.substring(0, 8)}...`);
+        return {
+            ...DEFAULT_CONFIG,
+            auth: { token: newToken, tokenHash: this.hashToken(newToken) }
+        };
+    }
+    /**
+     * Gera um token seguro aleatório
+     */
+    generateSecureToken() {
+        return crypto.randomBytes(32).toString('hex');
     }
     /**
      * Migra environments antigos para o novo formato com ID
