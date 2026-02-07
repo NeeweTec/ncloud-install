@@ -1157,7 +1157,9 @@ async function main() {
         // Para componentes de monitoramento
         serviceMonitor?.stop();
         realtimeServer?.stop();
-        config_store_js_1.daemonConfigStore.flush(); // Garante que qualquer mudança pendente seja salva
+        // IMPORTANTE: Salva apenas se houve mudanças (isDirty)
+        // NÃO força save para não sobrescrever mudanças feitas pela CLI
+        config_store_js_1.daemonConfigStore.save();
         await server.close();
         process.exit(0);
     };
