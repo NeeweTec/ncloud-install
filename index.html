@@ -3,174 +3,631 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ncloud Agent - Instalação</title>
-    <meta name="description" content="Script de instalação do Ncloud Agent para gerenciamento de serviços TOTVS Protheus">
+    <title>Ncloud Agent — Instalação</title>
+    <meta name="description" content="Instale o Ncloud Agent em seu servidor Linux com um único comando.">
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg: #000;
+            --bg-secondary: #0a0a0a;
+            --bg-card: #111;
+            --border: #222;
+            --border-hover: #333;
+            --text: #ededed;
+            --text-secondary: #888;
+            --text-tertiary: #666;
+            --accent: #fff;
+            --accent-secondary: #0070f3;
+            --success: #0070f3;
+            --gradient-start: #7928ca;
+            --gradient-end: #ff0080;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
+        html {
+            font-size: 16px;
+            scroll-behavior: smooth;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
             min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Layout */
+        .wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-content {
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: #e2e8f0;
-            padding: 20px;
+            justify-content: space-between;
+            height: 64px;
         }
-        .container {
-            max-width: 600px;
-            width: 100%;
-        }
+
         .logo {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-        .logo h1 {
-            font-size: 3rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .logo p {
-            color: #94a3b8;
-            margin-top: 8px;
-        }
-        .card {
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid rgba(148, 163, 184, 0.1);
-            border-radius: 16px;
-            padding: 32px;
-            backdrop-filter: blur(10px);
-        }
-        .card h2 {
-            font-size: 1.25rem;
-            margin-bottom: 16px;
-            color: #f1f5f9;
-        }
-        .code-block {
-            background: #0f172a;
-            border-radius: 8px;
-            padding: 16px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 14px;
-            overflow-x: auto;
-            position: relative;
-        }
-        .code-block code {
-            color: #22d3ee;
-        }
-        .copy-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: background 0.2s;
-        }
-        .copy-btn:hover {
-            background: #2563eb;
-        }
-        .features {
-            margin-top: 24px;
-            display: grid;
-            gap: 12px;
-        }
-        .feature {
             display: flex;
             align-items: center;
-            gap: 12px;
-            color: #94a3b8;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text);
+            text-decoration: none;
         }
-        .feature svg {
-            color: #22c55e;
-            flex-shrink: 0;
+
+        .logo svg {
+            width: 24px;
+            height: 24px;
         }
-        .links {
-            margin-top: 32px;
+
+        .nav {
             display: flex;
-            gap: 16px;
-            justify-content: center;
+            align-items: center;
+            gap: 32px;
         }
-        .links a {
-            color: #3b82f6;
+
+        .nav a {
+            color: var(--text-secondary);
             text-decoration: none;
             font-size: 14px;
+            transition: color 0.15s;
         }
-        .links a:hover {
-            text-decoration: underline;
+
+        .nav a:hover {
+            color: var(--text);
+        }
+
+        /* Hero */
+        .hero {
+            padding: 160px 0 100px;
+            text-align: center;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .hero h1 {
+            font-size: clamp(48px, 8vw, 72px);
+            font-weight: 600;
+            letter-spacing: -0.04em;
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 500px;
+            margin: 0 auto 48px;
+        }
+
+        /* Command Block */
+        .command-section {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .command-label {
+            font-size: 13px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .command-block {
+            position: relative;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .command-block:hover {
+            border-color: var(--border-hover);
+        }
+
+        .command-code {
+            display: flex;
+            align-items: center;
+            padding: 20px 24px;
+            padding-right: 120px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: var(--text);
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .command-code .prompt {
+            color: var(--text-tertiary);
+            margin-right: 8px;
+            user-select: none;
+        }
+
+        .copy-button {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: 8px;
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.15s;
+        }
+
+        .copy-button:hover {
+            opacity: 0.9;
+        }
+
+        .copy-button:active {
+            transform: translateY(-50%) scale(0.97);
+        }
+
+        .copy-button svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .copy-button.copied {
+            background: #0a0;
+        }
+
+        /* Features */
+        .features {
+            padding: 80px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .feature {
+            background: var(--bg);
+            padding: 32px;
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+
+        .feature-icon svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text);
+        }
+
+        .feature h3 {
+            font-size: 15px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .feature p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Commands Section */
+        .commands-section {
+            padding: 80px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .section-header h2 {
+            font-size: 32px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .commands-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .command-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            transition: border-color 0.15s;
+        }
+
+        .command-card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .command-card code {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--accent-secondary);
+        }
+
+        .command-card span {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Footer */
+        footer {
+            padding: 48px 0;
+            border-top: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 24px;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.15s;
+        }
+
+        .footer-links a:hover {
+            color: var(--text);
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .footer-brand svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero {
+                padding: 120px 0 60px;
+            }
+
+            .hero h1 {
+                font-size: 40px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .command-code {
+                font-size: 12px;
+                padding-right: 100px;
+            }
+
+            .copy-button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
+            .copy-button span {
+                display: none;
+            }
+
+            .nav {
+                display: none;
+            }
+
+            .features {
+                padding: 48px 0;
+            }
+
+            .feature {
+                padding: 24px;
+            }
+
+            .commands-section {
+                padding: 48px 0;
+            }
+
+            .footer-links {
+                flex-direction: column;
+                gap: 16px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <h1>NCLOUD</h1>
-            <p>Agent Installer</p>
-        </div>
-        
-        <div class="card">
-            <h2>Instalação Rápida</h2>
-            <div class="code-block">
-                <code>curl -fsSL https://get.neewecloud.com/install.sh | sudo bash</code>
-                <button class="copy-btn" onclick="copyCommand()">Copiar</button>
-            </div>
-            
-            <div class="features">
-                <div class="feature">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
+    <header>
+        <div class="wrapper">
+            <div class="header-content">
+                <a href="/" class="logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
                     </svg>
-                    <span>Instalação automática de dependências</span>
-                </div>
-                <div class="feature">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>Wizard de configuração interativo</span>
-                </div>
-                <div class="feature">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>Serviço systemd configurado automaticamente</span>
-                </div>
-                <div class="feature">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>Suporte a Ubuntu, Debian, CentOS, RHEL, Amazon Linux</span>
-                </div>
+                    Ncloud
+                </a>
+                <nav class="nav">
+                    <a href="https://docs.neewecloud.com" target="_blank">Docs</a>
+                    <a href="https://github.com/NeeweTec/ncloud-agent" target="_blank">GitHub</a>
+                    <a href="mailto:suporte@neewe.com.br">Suporte</a>
+                </nav>
             </div>
         </div>
-        
-        <div class="links">
-            <a href="https://docs.neewecloud.com" target="_blank">Documentação</a>
-            <a href="https://github.com/NeeweTec/ncloud-agent" target="_blank">GitHub</a>
-            <a href="mailto:suporte@neewe.com.br">Suporte</a>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="wrapper">
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    <span>v1.3.0 — Estável</span>
+                </div>
+                <h1>
+                    <span class="gradient-text">Ncloud Agent</span>
+                </h1>
+                <p>
+                    Gerencie serviços TOTVS Protheus com facilidade. 
+                    Um comando para instalar, configurar e monitorar.
+                </p>
+
+                <div class="command-section">
+                    <div class="command-label">Instalação</div>
+                    <div class="command-block">
+                        <div class="command-code">
+                            <span class="prompt">$</span>
+                            <span id="installCommand">curl -fsSL https://get.neewecloud.com/install.sh | sudo bash</span>
+                        </div>
+                        <button class="copy-button" onclick="copyCommand()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                            <span>Copiar</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="wrapper">
+                <div class="features-grid">
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                            </svg>
+                        </div>
+                        <h3>Auto-discovery</h3>
+                        <p>Detecta automaticamente ambientes Protheus no servidor</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
+                            </svg>
+                        </div>
+                        <h3>Monitoramento</h3>
+                        <p>Status em tempo real de todos os serviços e processos</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </div>
+                        <h3>Webhooks</h3>
+                        <p>Notificações automáticas quando serviços mudam de estado</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/>
+                            </svg>
+                        </div>
+                        <h3>API REST</h3>
+                        <p>Integração completa com sistemas externos</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                        </div>
+                        <h3>Seguro</h3>
+                        <p>Autenticação via token e comunicação criptografada</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                            </svg>
+                        </div>
+                        <h3>Ubuntu, Debian, CentOS</h3>
+                        <p>Suporte às principais distribuições Linux</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="commands-section">
+            <div class="wrapper">
+                <div class="section-header">
+                    <h2>CLI Simples</h2>
+                    <p>Comandos diretos para gerenciar o agent</p>
+                </div>
+                <div class="commands-grid">
+                    <div class="command-card">
+                        <code>ncloud start</code>
+                        <span>Iniciar</span>
+                    </div>
+                    <div class="command-card">
+                        <code>ncloud stop</code>
+                        <span>Parar</span>
+                    </div>
+                    <div class="command-card">
+                        <code>ncloud restart</code>
+                        <span>Reiniciar</span>
+                    </div>
+                    <div class="command-card">
+                        <code>ncloud status</code>
+                        <span>Ver status</span>
+                    </div>
+                    <div class="command-card">
+                        <code>ncloud logs</code>
+                        <span>Logs em tempo real</span>
+                    </div>
+                    <div class="command-card">
+                        <code>ncloud menu</code>
+                        <span>CLI interativo</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="wrapper">
+            <div class="footer-links">
+                <a href="https://docs.neewecloud.com" target="_blank">Documentação</a>
+                <a href="https://github.com/NeeweTec/ncloud-agent" target="_blank">GitHub</a>
+                <a href="mailto:suporte@neewe.com.br">Suporte</a>
+                <a href="https://neewe.com.br" target="_blank">NEEWE</a>
+            </div>
+            <div class="footer-brand">
+                <span>© 2026 NEEWE</span>
+            </div>
         </div>
-    </div>
-    
+    </footer>
+
     <script>
         function copyCommand() {
-            const command = 'curl -fsSL https://get.neewecloud.com/install.sh | sudo bash';
+            const command = document.getElementById('installCommand').textContent;
             navigator.clipboard.writeText(command).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                btn.textContent = 'Copiado!';
-                setTimeout(() => btn.textContent = 'Copiar', 2000);
+                const btn = document.querySelector('.copy-button');
+                btn.classList.add('copied');
+                btn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>Copiado!</span>
+                `;
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span>Copiar</span>
+                    `;
+                }, 2000);
             });
         }
     </script>
 </body>
 </html>
-

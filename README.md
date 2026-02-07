@@ -1,28 +1,92 @@
-# Ncloud Agent - Instalação
+<p align="center">
+  <img src="https://raw.githubusercontent.com/NeeweTec/ncloud-install/main/assets/logo.svg" alt="Ncloud" width="120" />
+</p>
 
-Script de instalação do Ncloud Agent para servidores Linux.
+<h1 align="center">Ncloud Agent</h1>
 
-## Instalação Rápida
+<p align="center">
+  <strong>Gerenciamento inteligente de serviços TOTVS Protheus</strong>
+</p>
+
+<p align="center">
+  <a href="https://get.neewecloud.com"><img src="https://img.shields.io/badge/version-1.3.0-blue?style=flat-square" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/platform-linux-success?style=flat-square" alt="Platform"></a>
+  <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square" alt="Node"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square" alt="License"></a>
+</p>
+
+<p align="center">
+  <a href="https://docs.neewecloud.com">Documentação</a> •
+  <a href="#instalação">Instalação</a> •
+  <a href="#comandos">Comandos</a> •
+  <a href="mailto:suporte@neewe.com.br">Suporte</a>
+</p>
+
+---
+
+## Instalação
+
+Um único comando para instalar e configurar:
 
 ```bash
 curl -fsSL https://get.neewecloud.com/install.sh | sudo bash
 ```
 
-## O que o Script Faz
+O wizard interativo irá guiá-lo pela configuração inicial.
 
-1. ✅ Verifica requisitos do sistema (root, OS)
-2. ✅ Instala Node.js 20+ automaticamente (se necessário)
-3. ✅ Baixa a última versão do Ncloud Agent
-4. ✅ Executa wizard de configuração interativo
-5. ✅ Cria serviço systemd
-6. ✅ Inicia o agent automaticamente
+## Comandos
+
+Após a instalação, use o CLI `ncloud` para gerenciar o agent:
+
+```bash
+ncloud start      # Iniciar
+ncloud stop       # Parar
+ncloud restart    # Reiniciar
+ncloud status     # Ver status
+ncloud logs       # Logs em tempo real
+ncloud menu       # CLI interativo
+```
+
+> **Nota**: Comandos que alteram o serviço requerem `sudo`
+
+## Funcionalidades
+
+- **Auto-discovery** — Detecta automaticamente ambientes Protheus
+- **Monitoramento** — Status em tempo real de serviços e processos
+- **Webhooks** — Notificações automáticas de eventos
+- **API REST** — Integração com sistemas externos
+- **Segurança** — Autenticação via token, comunicação criptografada
 
 ## Requisitos
 
-- **Sistema Operacional**: Linux (Ubuntu, Debian, CentOS, RHEL, Amazon Linux)
-- **Arquitetura**: x64 ou arm64
-- **Permissões**: Root (sudo)
-- **Rede**: Acesso à internet para download
+| Requisito | Especificação |
+|-----------|---------------|
+| Sistema | Ubuntu 20+, Debian 11+, CentOS 8+, RHEL 8+, Amazon Linux 2 |
+| Node.js | 20 ou superior (instalado automaticamente) |
+| Permissão | Root (sudo) |
+
+## Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Ncloud Dashboard                         │
+│                   (Interface Web/App)                        │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ HTTPS
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Ncloud Agent                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   REST API   │  │   Monitor    │  │   Webhooks   │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+        ┌─────────────┼─────────────┐
+        ▼             ▼             ▼
+   ┌─────────┐  ┌─────────┐  ┌─────────┐
+   │AppServer│  │ DBAccess│  │ License │
+   └─────────┘  └─────────┘  └─────────┘
+```
 
 ## Desinstalar
 
@@ -30,28 +94,20 @@ curl -fsSL https://get.neewecloud.com/install.sh | sudo bash
 curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- --uninstall
 ```
 
-## Comandos Úteis
+Ou usando o CLI:
 
 ```bash
-# Gerenciar serviço
-sudo systemctl start ncloud-agent    # Iniciar
-sudo systemctl stop ncloud-agent     # Parar
-sudo systemctl restart ncloud-agent  # Reiniciar
-sudo systemctl status ncloud-agent   # Ver status
-
-# Ver logs
-sudo journalctl -u ncloud-agent -f   # Logs em tempo real
-
-# CLI interativo
-sudo ncloud-agent                    # Abrir menu
+sudo ncloud uninstall
 ```
 
-## Documentação
+## Suporte
 
-- **Docs**: https://docs.neewecloud.com
-- **Suporte**: suporte@neewe.com.br
+- **Documentação**: [docs.neewecloud.com](https://docs.neewecloud.com)
+- **Email**: [suporte@neewe.com.br](mailto:suporte@neewe.com.br)
+- **Issues**: [GitHub Issues](https://github.com/NeeweTec/ncloud-agent/issues)
 
-## Licença
+---
 
-Copyright © 2026 NEEWE - Todos os direitos reservados.
-
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://neewe.com.br">NEEWE</a></sub>
+</p>
