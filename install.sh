@@ -340,42 +340,30 @@ configure_agent() {
         
         if [[ -n "$WEBHOOK_URL" ]]; then
             local WEBHOOK_ID=$(openssl rand -hex 8)
-            WEBHOOK_CONFIG=",
-  \"webhooks\": [
-    {
-      \"id\": \"wh-${WEBHOOK_ID}\",
-      \"name\": \"Webhook Principal\",
-      \"url\": \"${WEBHOOK_URL}\",
-      \"secret\": \"${WEBHOOK_SECRET}\",
-      \"events\": [\"service:started\", \"service:stopped\", \"service:crashed\"],
-      \"enabled\": true,
-      \"retryCount\": 3,
-      \"retryDelayMs\": 5000,
-      \"timeoutMs\": 10000,
-      \"createdAt\": \"$(date -Iseconds)\",
-      \"updatedAt\": \"$(date -Iseconds)\"
-    }
-  ]"
+            local CREATED_AT=$(date -Iseconds)
+            WEBHOOK_CONFIG="[{\"id\":\"wh-${WEBHOOK_ID}\",\"name\":\"Webhook Principal\",\"url\":\"${WEBHOOK_URL}\",\"secret\":\"${WEBHOOK_SECRET}\",\"events\":[\"service:started\",\"service:stopped\",\"service:crashed\"],\"enabled\":true,\"retryCount\":3,\"retryDelayMs\":5000,\"timeoutMs\":10000,\"createdAt\":\"${CREATED_AT}\",\"updatedAt\":\"${CREATED_AT}\"}]"
         fi
     fi
     
     # Criar config.json
-    cat > "$CONFIG_DIR/config.json" << EOF
+    local WEBHOOKS_JSON="${WEBHOOK_CONFIG:-[]}"
+    
+    cat > "$CONFIG_DIR/config.json" << EOFCONFIG
 {
   "server": {
     "port": ${PORT},
     "host": "0.0.0.0"
   },
   "auth": {
-    "token": "$TOKEN"
+    "token": "${TOKEN}"
   },
   "environments": [],
   "instances": [],
   "scanPaths": ${SCAN_PATHS},
-  "autoStart": true${WEBHOOK_CONFIG:-,
-  "webhooks": []}
+  "autoStart": true,
+  "webhooks": ${WEBHOOKS_JSON}
 }
-EOF
+EOFCONFIG
     
     chmod 600 "$CONFIG_DIR/config.json"
     
