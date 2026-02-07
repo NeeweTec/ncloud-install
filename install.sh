@@ -1,104 +1,194 @@
 #!/bin/bash
-# ============================================================================
-# NCLOUD AGENT - Script de Instalação
-# 
-# Uso:
-#   curl -fsSL https://get.neewecloud.com/install.sh | sudo bash
 #
-# Copyright (c) 2026 NEEWE - Todos os direitos reservados
-# ============================================================================
+# NCLOUD AGENT - Instalador Linux
+# NEEWE Tecnologia | v1.3.0
+#
+# Uso: curl -fsSL https://get.neewecloud.com/install.sh | sudo bash
+#
 
-set -e
+set -o pipefail
 
-# Configuração
-GITHUB_REPO="NeeweTec/ncloud-agent"
-INSTALL_DIR="/opt/ncloud-agent"
-CONFIG_DIR="/etc/ncloud-agent"
-SERVICE_NAME="ncloud-agent"
-MIN_NODE_VERSION="20"
+# ==============================================================================
+# CONFIGURACAO
+# ==============================================================================
 
-# Cores
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m'
-BOLD='\033[1m'
+readonly VERSION="1.3.0"
+readonly AGENT_VERSION="1.3.0"
 
-# ============================================================================
-# FUNÇÕES
-# ============================================================================
+# Cores ANSI
+readonly RST='\033[0m'
+readonly BOLD='\033[1m'
+readonly DIM='\033[2m'
 
-print_banner() {
-    echo -e "${CYAN}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                                                              ║"
-    echo "║     ███╗   ██╗ ██████╗██╗      ██████╗ ██╗   ██╗██████╗      ║"
-    echo "║     ████╗  ██║██╔════╝██║     ██╔═══██╗██║   ██║██╔══██╗     ║"
-    echo "║     ██╔██╗ ██║██║     ██║     ██║   ██║██║   ██║██║  ██║     ║"
-    echo "║     ██║╚██╗██║██║     ██║     ██║   ██║██║   ██║██║  ██║     ║"
-    echo "║     ██║ ╚████║╚██████╗███████╗╚██████╔╝╚██████╔╝██████╔╝     ║"
-    echo "║     ╚═╝  ╚═══╝ ╚═════╝╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝      ║"
-    echo "║                                                              ║"
-    echo "║              AGENT INSTALLER v1.3.0                          ║"
-    echo "║              Protheus Service Manager                        ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
+readonly RED='\033[31m'
+readonly GREEN='\033[32m'
+readonly YELLOW='\033[33m'
+readonly BLUE='\033[34m'
+readonly CYAN='\033[36m'
+readonly WHITE='\033[37m'
+readonly GRAY='\033[90m'
+readonly MAGENTA='\033[35m'
+
+# Diretorios
+readonly INSTALL_DIR="/opt/ncloud-agent"
+readonly CONFIG_DIR="/etc/ncloud-agent"
+readonly LOG_DIR="/var/log/ncloud-agent"
+readonly SERVICE_NAME="ncloud-agent"
+
+# URLs
+readonly DOWNLOAD_URL="https://get.neewecloud.com/releases/v${AGENT_VERSION}/ncloud-agent-linux-x64-v${AGENT_VERSION}.tar.gz"
+
+# Requisitos
+readonly MIN_NODE_VERSION="20"
+
+# ==============================================================================
+# FUNCOES DE UI
+# ==============================================================================
+
+print_line() {
+    printf "${GRAY}%s${RST}\n" "────────────────────────────────────────────────────────────────────────────────"
 }
 
-log_info() { echo -e "${BLUE}ℹ${NC}  $1"; }
-log_success() { echo -e "${GREEN}✔${NC}  $1"; }
-log_warning() { echo -e "${YELLOW}⚠${NC}  $1"; }
-log_error() { echo -e "${RED}✖${NC}  $1"; }
-log_step() { echo -e "\n${WHITE}${BOLD}▸ $1${NC}"; }
+print_header() {
+    clear
+    echo ""
+    printf "${CYAN}"
+    cat << 'EOF'
+    ╔═══════════════════════════════════════════════════════════════════════════╗
+    ║                                                                           ║
+    ║     ███╗   ██╗ ██████╗██╗      ██████╗ ██╗   ██╗██████╗                   ║
+    ║     ████╗  ██║██╔════╝██║     ██╔═══██╗██║   ██║██╔══██╗                  ║
+    ║     ██╔██╗ ██║██║     ██║     ██║   ██║██║   ██║██║  ██║                  ║
+    ║     ██║╚██╗██║██║     ██║     ██║   ██║██║   ██║██║  ██║                  ║
+    ║     ██║ ╚████║╚██████╗███████╗╚██████╔╝╚██████╔╝██████╔╝                  ║
+    ║     ╚═╝  ╚═══╝ ╚═════╝╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝                   ║
+    ║                                                                           ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+EOF
+    printf "${RST}"
+    echo ""
+    printf "  ${BOLD}${WHITE}AGENT INSTALLER${RST} ${GRAY}|${RST} v${VERSION} ${GRAY}|${RST} Protheus Service Manager\n"
+    printf "  ${GRAY}NEEWE Tecnologia${RST}\n"
+    print_line
+    echo ""
+}
+
+print_section() {
+    local title="$1"
+    local icon="$2"
+    echo ""
+    printf "  ${BOLD}${WHITE}%s  %s${RST}\n" "$icon" "$title"
+    printf "  ${GRAY}────────────────────────────────────────${RST}\n"
+}
+
+print_step() {
+    local step="$1"
+    local total="$2"
+    local title="$3"
+    echo ""
+    printf "  ${CYAN}[%d/%d]${RST} ${BOLD}%s${RST}\n" "$step" "$total" "$title"
+}
+
+msg_ok() {
+    printf "  ${GREEN}✓${RST}  %s\n" "$1"
+}
+
+msg_fail() {
+    printf "  ${RED}✗${RST}  %s\n" "$1"
+}
+
+msg_skip() {
+    printf "  ${YELLOW}○${RST}  %s\n" "$1"
+}
+
+msg_info() {
+    printf "  ${BLUE}ℹ${RST}  %s\n" "$1"
+}
+
+msg_warn() {
+    printf "  ${YELLOW}⚠${RST}  %s\n" "$1"
+}
+
+# Spinner
+SPINNER_PID=""
+
+spinner_start() {
+    local msg="$1"
+    (
+        chars="◐◓◑◒"
+        while true; do
+            for (( i=0; i<${#chars}; i++ )); do
+                printf "\r  ${CYAN}%s${RST}  %s  " "${chars:$i:1}" "$msg"
+                sleep 0.12
+            done
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+spinner_stop() {
+    [[ -n "$SPINNER_PID" ]] && kill "$SPINNER_PID" 2>/dev/null && wait "$SPINNER_PID" 2>/dev/null
+    SPINNER_PID=""
+    printf "\r\033[K"
+}
 
 prompt() {
     local message="$1"
     local default="$2"
-    echo -ne "${CYAN}?${NC} ${message} [${default}]: "
-    read result
+    local result=""
+    
+    printf "  ${CYAN}?${RST}  %s " "$message"
+    [[ -n "$default" ]] && printf "${GRAY}[%s]${RST} " "$default"
+    printf ": "
+    read -r result
     echo "${result:-$default}"
 }
 
 confirm() {
     local message="$1"
     local default="${2:-n}"
-    if [ "$default" = "y" ]; then
-        echo -ne "${CYAN}?${NC} ${message} [Y/n]: "
+    local result=""
+    
+    if [[ "$default" == "y" ]]; then
+        printf "  ${CYAN}?${RST}  %s ${GRAY}[Y/n]${RST}: " "$message"
     else
-        echo -ne "${CYAN}?${NC} ${message} [y/N]: "
+        printf "  ${CYAN}?${RST}  %s ${GRAY}[y/N]${RST}: " "$message"
     fi
-    read result
+    read -r result
     result="${result:-$default}"
     [[ "$result" =~ ^[Yy]$ ]]
 }
 
+# ==============================================================================
+# FUNCOES DE SISTEMA
+# ==============================================================================
+
 check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        log_error "Este script precisa ser executado como root"
-        echo -e "    Execute: ${CYAN}sudo bash${NC} ou ${CYAN}curl ... | sudo bash${NC}"
+    if [[ $EUID -ne 0 ]]; then
+        msg_fail "Este script precisa ser executado como root"
+        echo ""
+        printf "     Execute: ${CYAN}sudo bash${RST} ou ${CYAN}curl ... | sudo bash${RST}\n"
+        echo ""
         exit 1
     fi
+    msg_ok "Permissoes de root verificadas"
 }
 
 check_os() {
-    if [ -f /etc/os-release ]; then
+    if [[ -f /etc/os-release ]]; then
         . /etc/os-release
-        OS=$NAME
-        log_info "Sistema: $OS"
-    else
-        log_error "Sistema operacional não suportado"
-        exit 1
+        msg_ok "Sistema detectado: ${CYAN}$NAME${RST}"
+        return 0
     fi
+    msg_fail "Sistema operacional nao suportado"
+    exit 1
 }
 
 check_node() {
     if command -v node &> /dev/null; then
-        NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-        if [ "$NODE_VERSION" -ge "$MIN_NODE_VERSION" ]; then
-            log_success "Node.js $(node -v) instalado"
+        local node_ver=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+        if [[ "$node_ver" -ge "$MIN_NODE_VERSION" ]]; then
+            msg_ok "Node.js $(node -v) instalado"
             return 0
         fi
     fi
@@ -106,133 +196,133 @@ check_node() {
 }
 
 install_node() {
-    log_step "Instalando Node.js 20..."
+    print_step 2 5 "Instalando Node.js"
+    
+    spinner_start "Configurando repositorio NodeSource"
     
     if command -v apt-get &> /dev/null; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-        apt-get install -y nodejs
+        curl -fsSL https://deb.nodesource.com/setup_20.x 2>/dev/null | bash - >/dev/null 2>&1
+        spinner_stop
+        
+        spinner_start "Instalando Node.js via apt"
+        apt-get install -y nodejs >/dev/null 2>&1
+        spinner_stop
+        
     elif command -v yum &> /dev/null; then
-        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-        yum install -y nodejs
+        curl -fsSL https://rpm.nodesource.com/setup_20.x 2>/dev/null | bash - >/dev/null 2>&1
+        spinner_stop
+        
+        spinner_start "Instalando Node.js via yum"
+        yum install -y nodejs >/dev/null 2>&1
+        spinner_stop
+        
     elif command -v dnf &> /dev/null; then
-        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-        dnf install -y nodejs
+        curl -fsSL https://rpm.nodesource.com/setup_20.x 2>/dev/null | bash - >/dev/null 2>&1
+        spinner_stop
+        
+        spinner_start "Instalando Node.js via dnf"
+        dnf install -y nodejs >/dev/null 2>&1
+        spinner_stop
     else
-        log_error "Instale Node.js 20+ manualmente: https://nodejs.org"
+        spinner_stop
+        msg_fail "Gerenciador de pacotes nao suportado"
+        msg_info "Instale Node.js 20+ manualmente: ${CYAN}https://nodejs.org${RST}"
         exit 1
     fi
     
-    log_success "Node.js instalado: $(node -v)"
+    if command -v node &> /dev/null; then
+        msg_ok "Node.js $(node -v) instalado com sucesso"
+    else
+        msg_fail "Falha ao instalar Node.js"
+        exit 1
+    fi
 }
 
 generate_token() {
     openssl rand -hex 32
 }
 
-download_release() {
-    log_step "Baixando última versão..."
+# ==============================================================================
+# INSTALACAO
+# ==============================================================================
+
+download_agent() {
+    print_step 3 5 "Baixando Ncloud Agent v${AGENT_VERSION}"
     
-    # Versão atual
-    local VERSION="1.3.0"
-    local DOWNLOAD_URL="https://get.neewecloud.com/releases/v${VERSION}/ncloud-agent-linux-x64-v${VERSION}.tar.gz"
+    spinner_start "Baixando de get.neewecloud.com"
     
-    log_info "Baixando: $DOWNLOAD_URL"
-    
-    if ! curl -fsSL "$DOWNLOAD_URL" -o /tmp/ncloud-agent.tar.gz; then
-        log_error "Falha ao baixar o agente"
+    if ! curl -fsSL "$DOWNLOAD_URL" -o /tmp/ncloud-agent.tar.gz 2>/dev/null; then
+        spinner_stop
+        msg_fail "Falha ao baixar o agente"
+        msg_info "URL: ${CYAN}$DOWNLOAD_URL${RST}"
         exit 1
     fi
     
+    spinner_stop
+    msg_ok "Download concluido"
+    
+    spinner_start "Extraindo arquivos"
     mkdir -p "$INSTALL_DIR"
-    tar -xzf /tmp/ncloud-agent.tar.gz -C "$INSTALL_DIR" --strip-components=1
+    tar -xzf /tmp/ncloud-agent.tar.gz -C "$INSTALL_DIR" --strip-components=1 2>/dev/null
     rm -f /tmp/ncloud-agent.tar.gz
+    spinner_stop
+    msg_ok "Arquivos extraidos para ${CYAN}$INSTALL_DIR${RST}"
     
-    # Instalar dependências
+    spinner_start "Instalando dependencias"
     cd "$INSTALL_DIR"
-    npm install --production --ignore-scripts 2>/dev/null || true
+    npm install --production --ignore-scripts >/dev/null 2>&1 || true
     cd - > /dev/null
-    
-    log_success "Instalado em $INSTALL_DIR"
+    spinner_stop
+    msg_ok "Dependencias instaladas"
 }
 
-install_from_source() {
-    log_step "Instalando do código fonte..."
-    
-    # Clonar repositório
-    rm -rf /tmp/ncloud-agent-src
-    git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" /tmp/ncloud-agent-src
-    
-    cd /tmp/ncloud-agent-src
-    
-    # Instalar dependências e compilar
-    npm install
-    npm run build:daemon
-    
-    # Copiar para diretório de instalação
-    mkdir -p "$INSTALL_DIR"
-    cp -r dist "$INSTALL_DIR/"
-    cp package.json "$INSTALL_DIR/"
-    
-    # Instalar dependências de produção
-    cd "$INSTALL_DIR"
-    npm install --production --ignore-scripts
-    
-    # Limpar
-    rm -rf /tmp/ncloud-agent-src
-    cd - > /dev/null
-    
-    log_success "Instalado do código fonte em $INSTALL_DIR"
-}
-
-create_config() {
-    log_step "Configurando..."
+configure_agent() {
+    print_step 4 5 "Configurando Agent"
     
     mkdir -p "$CONFIG_DIR"
-    
-    # Wizard
-    echo
-    echo -e "${WHITE}${BOLD}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${WHITE}${BOLD}                    CONFIGURAÇÃO DO AGENT                       ${NC}"
-    echo -e "${WHITE}${BOLD}═══════════════════════════════════════════════════════════════${NC}"
-    echo
+    mkdir -p "$LOG_DIR"
     
     # Gerar token
-    TOKEN=$(generate_token)
-    log_info "Token de autenticação gerado automaticamente"
+    local TOKEN=$(generate_token)
+    
+    echo ""
+    print_section "Configuracao Interativa" "⚙️"
+    echo ""
     
     # Porta
-    PORT=$(prompt "Porta da API" "3100")
+    local PORT=$(prompt "Porta da API" "3100")
     
-    # Diretórios de scan
-    echo
-    log_info "Diretórios padrão para buscar Protheus:"
-    echo -e "    ${CYAN}/totvs, /opt/totvs, /home/totvs${NC}"
+    # Diretorios de scan
+    echo ""
+    msg_info "Diretorios padrao para buscar Protheus:"
+    printf "     ${GRAY}/totvs, /opt/totvs, /home/totvs${RST}\n"
+    echo ""
     
-    CUSTOM_PATHS=""
-    if confirm "Adicionar diretórios customizados?" "n"; then
-        CUSTOM_PATHS=$(prompt "Diretórios adicionais (separados por vírgula)" "")
+    local CUSTOM_PATHS=""
+    if confirm "Adicionar diretorios customizados" "n"; then
+        CUSTOM_PATHS=$(prompt "Diretorios adicionais (separados por virgula)" "")
     fi
     
     # Montar array de paths
-    SCAN_PATHS='["/totvs", "/opt/totvs", "/home/totvs"'
-    if [ -n "$CUSTOM_PATHS" ]; then
+    local SCAN_PATHS='["/totvs", "/opt/totvs", "/home/totvs"'
+    if [[ -n "$CUSTOM_PATHS" ]]; then
         IFS=',' read -ra CUSTOM_ARRAY <<< "$CUSTOM_PATHS"
         for path in "${CUSTOM_ARRAY[@]}"; do
-            path=$(echo "$path" | xargs)  # trim
+            path=$(echo "$path" | xargs)
             SCAN_PATHS+=", \"$path\""
         done
     fi
     SCAN_PATHS+=']'
     
     # Webhook (opcional)
-    WEBHOOK_CONFIG=""
-    echo
-    if confirm "Configurar webhook para notificações?" "n"; then
-        WEBHOOK_URL=$(prompt "URL do webhook" "")
-        WEBHOOK_SECRET=$(prompt "Secret do webhook (opcional, Enter para pular)" "")
+    local WEBHOOK_CONFIG=""
+    echo ""
+    if confirm "Configurar webhook para notificacoes" "n"; then
+        local WEBHOOK_URL=$(prompt "URL do webhook" "")
+        local WEBHOOK_SECRET=$(prompt "Secret do webhook (opcional)" "")
         
-        if [ -n "$WEBHOOK_URL" ]; then
-            WEBHOOK_ID=$(openssl rand -hex 8)
+        if [[ -n "$WEBHOOK_URL" ]]; then
+            local WEBHOOK_ID=$(openssl rand -hex 8)
             WEBHOOK_CONFIG=",
   \"webhooks\": [
     {
@@ -271,11 +361,19 @@ create_config() {
 EOF
     
     chmod 600 "$CONFIG_DIR/config.json"
-    log_success "Configuração salva em $CONFIG_DIR/config.json"
+    
+    echo ""
+    msg_ok "Configuracao salva em ${CYAN}$CONFIG_DIR/config.json${RST}"
+    
+    # Salvar variaveis para uso posterior
+    SAVED_TOKEN="$TOKEN"
+    SAVED_PORT="$PORT"
 }
 
 create_service() {
-    log_step "Criando serviço systemd..."
+    print_step 5 5 "Criando Servico Systemd"
+    
+    spinner_start "Configurando servico"
     
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
@@ -293,7 +391,6 @@ RestartSec=10
 Environment=NODE_ENV=production
 Environment=NCLOUD_CONFIG=$CONFIG_DIR/config.json
 
-# Logs
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ncloud-agent
@@ -302,167 +399,291 @@ SyslogIdentifier=ncloud-agent
 WantedBy=multi-user.target
 EOF
     
-    # Criar link simbólico para CLI
-    ln -sf "$INSTALL_DIR/dist/linux/cli.js" /usr/local/bin/ncloud-agent 2>/dev/null || true
-    chmod +x "$INSTALL_DIR/dist/linux/cli.js" 2>/dev/null || true
+    spinner_stop
+    msg_ok "Servico systemd criado"
     
-    systemctl daemon-reload
-    systemctl enable ${SERVICE_NAME} > /dev/null 2>&1
-    log_success "Serviço criado e habilitado"
-}
-
-install_ncloud_wrapper() {
-    log_step "Instalando CLI wrapper 'ncloud'..."
+    # Criar CLI wrapper
+    spinner_start "Instalando CLI 'ncloud'"
     
-    # Baixar wrapper do repositório
-    WRAPPER_URL="https://raw.githubusercontent.com/NeeweTec/ncloud-install/main/ncloud"
-    
-    if curl -fsSL "$WRAPPER_URL" -o /usr/local/bin/ncloud 2>/dev/null; then
-        chmod +x /usr/local/bin/ncloud
-        log_success "Comando 'ncloud' instalado"
-    else
-        # Fallback: criar inline
-        cat > /usr/local/bin/ncloud << 'WRAPPER_EOF'
+    cat > /usr/local/bin/ncloud << 'NCLOUD_CLI'
 #!/bin/bash
 SERVICE_NAME="ncloud-agent"
 CONFIG_FILE="/etc/ncloud-agent/config.json"
 INSTALL_DIR="/opt/ncloud-agent"
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'; BOLD='\033[1m'
-check_root() { [ "$EUID" -ne 0 ] && echo -e "${RED}✖${NC} Execute: ${CYAN}sudo ncloud $1${NC}" && exit 1; }
+
+RST='\033[0m'; GREEN='\033[32m'; RED='\033[31m'; YELLOW='\033[33m'; CYAN='\033[36m'; BOLD='\033[1m'; GRAY='\033[90m'
+
+check_root() { [ "$EUID" -ne 0 ] && echo -e "  ${RED}✗${RST}  Execute: ${CYAN}sudo ncloud $1${RST}" && exit 1; }
+
 case "${1:-help}" in
-    start) check_root start; systemctl start $SERVICE_NAME && echo -e "${GREEN}✔${NC} Agent iniciado" ;;
-    stop) check_root stop; systemctl stop $SERVICE_NAME && echo -e "${GREEN}✔${NC} Agent parado" ;;
-    restart) check_root restart; systemctl restart $SERVICE_NAME && echo -e "${GREEN}✔${NC} Agent reiniciado" ;;
-    status|st) systemctl status $SERVICE_NAME --no-pager ;;
-    logs|log|l) journalctl -u $SERVICE_NAME -f --no-hostname -o cat ;;
-    menu|m) check_root menu; node "$INSTALL_DIR/dist/linux/cli.js" ;;
-    version|v) grep -o '"version":[^,}]*' "$INSTALL_DIR/package.json" 2>/dev/null | cut -d'"' -f4 | xargs -I{} echo "Ncloud Agent v{}" ;;
-    *) echo -e "${BOLD}ncloud${NC} - start|stop|restart|status|logs|menu|version"; echo "Execute: ${CYAN}ncloud [comando]${NC}" ;;
+    start)
+        check_root start
+        echo -e "  ${CYAN}▸${RST}  Iniciando Ncloud Agent..."
+        systemctl start $SERVICE_NAME
+        sleep 1
+        systemctl is-active --quiet $SERVICE_NAME && echo -e "  ${GREEN}✓${RST}  Agent iniciado" || echo -e "  ${RED}✗${RST}  Falha ao iniciar"
+        ;;
+    stop)
+        check_root stop
+        echo -e "  ${CYAN}▸${RST}  Parando Ncloud Agent..."
+        systemctl stop $SERVICE_NAME
+        echo -e "  ${GREEN}✓${RST}  Agent parado"
+        ;;
+    restart)
+        check_root restart
+        echo -e "  ${CYAN}▸${RST}  Reiniciando Ncloud Agent..."
+        systemctl restart $SERVICE_NAME
+        sleep 1
+        systemctl is-active --quiet $SERVICE_NAME && echo -e "  ${GREEN}✓${RST}  Agent reiniciado" || echo -e "  ${RED}✗${RST}  Falha ao reiniciar"
+        ;;
+    status|st)
+        echo ""
+        echo -e "  ${BOLD}NCLOUD AGENT STATUS${RST}"
+        echo ""
+        systemctl is-active --quiet $SERVICE_NAME && echo -e "  ${GREEN}●${RST}  Servico: ${GREEN}Ativo${RST}" || echo -e "  ${RED}○${RST}  Servico: ${RED}Inativo${RST}"
+        systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null && echo -e "  ${GREEN}●${RST}  Autostart: ${GREEN}Habilitado${RST}" || echo -e "  ${YELLOW}○${RST}  Autostart: ${YELLOW}Desabilitado${RST}"
+        if [ -f "$CONFIG_FILE" ]; then
+            PORT=$(grep -o '"port":[^,}]*' "$CONFIG_FILE" | head -1 | grep -o '[0-9]*')
+            echo -e "  ${CYAN}●${RST}  Porta: ${CYAN}${PORT:-3100}${RST}"
+        fi
+        PID=$(systemctl show --property MainPID --value $SERVICE_NAME 2>/dev/null)
+        [ "$PID" != "0" ] && [ -n "$PID" ] && echo -e "  ${CYAN}●${RST}  PID: ${CYAN}$PID${RST}"
+        IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+        [ -n "$IP" ] && echo -e "  ${CYAN}●${RST}  Acesso: ${CYAN}http://${IP}:${PORT:-3100}${RST}"
+        echo ""
+        ;;
+    logs|log|l)
+        echo -e "  ${CYAN}▸${RST}  Logs em tempo real ${GRAY}(Ctrl+C para sair)${RST}"
+        echo ""
+        journalctl -u $SERVICE_NAME -f --no-hostname -o cat
+        ;;
+    menu|m)
+        check_root menu
+        [ -f "$INSTALL_DIR/dist/linux/cli.js" ] && node "$INSTALL_DIR/dist/linux/cli.js" || echo -e "  ${RED}✗${RST}  CLI nao encontrado"
+        ;;
+    version|v|-v|--version)
+        [ -f "$INSTALL_DIR/package.json" ] && grep -o '"version":[^,}]*' "$INSTALL_DIR/package.json" | cut -d'"' -f4 | xargs -I{} echo -e "  Ncloud Agent ${CYAN}v{}${RST}" || echo -e "  ${YELLOW}Versao desconhecida${RST}"
+        ;;
+    *)
+        echo ""
+        echo -e "  ${BOLD}NCLOUD${RST} - CLI do Ncloud Agent"
+        echo ""
+        echo -e "  ${BOLD}COMANDOS:${RST}"
+        echo -e "     ${CYAN}start${RST}      Iniciar o agent"
+        echo -e "     ${CYAN}stop${RST}       Parar o agent"
+        echo -e "     ${CYAN}restart${RST}    Reiniciar o agent"
+        echo -e "     ${CYAN}status${RST}     Ver status do servico"
+        echo -e "     ${CYAN}logs${RST}       Ver logs em tempo real"
+        echo -e "     ${CYAN}menu${RST}       Abrir CLI interativo"
+        echo -e "     ${CYAN}version${RST}    Ver versao instalada"
+        echo ""
+        echo -e "  ${BOLD}EXEMPLOS:${RST}"
+        echo -e "     ${GRAY}sudo ncloud start${RST}"
+        echo -e "     ${GRAY}ncloud status${RST}"
+        echo -e "     ${GRAY}ncloud logs${RST}"
+        echo ""
+        ;;
 esac
-WRAPPER_EOF
-        chmod +x /usr/local/bin/ncloud
-        log_success "Comando 'ncloud' instalado (fallback)"
+NCLOUD_CLI
+    
+    chmod +x /usr/local/bin/ncloud
+    ln -sf "$INSTALL_DIR/dist/linux/cli.js" /usr/local/bin/ncloud-agent 2>/dev/null || true
+    chmod +x "$INSTALL_DIR/dist/linux/cli.js" 2>/dev/null || true
+    
+    spinner_stop
+    msg_ok "CLI ${CYAN}ncloud${RST} instalado"
+    
+    # Habilitar e iniciar servico
+    spinner_start "Habilitando servico"
+    systemctl daemon-reload
+    systemctl enable ${SERVICE_NAME} > /dev/null 2>&1
+    spinner_stop
+    msg_ok "Servico habilitado para iniciar no boot"
+    
+    spinner_start "Iniciando agent"
+    systemctl start ${SERVICE_NAME}
+    sleep 3
+    spinner_stop
+    
+    if systemctl is-active --quiet ${SERVICE_NAME}; then
+        msg_ok "Agent iniciado com sucesso"
+    else
+        msg_warn "O agent pode nao ter iniciado corretamente"
+        msg_info "Verifique: ${CYAN}ncloud logs${RST}"
     fi
 }
 
-show_result() {
-    # Detectar IP
-    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+show_success() {
+    local LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
     
-    echo
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                                                              ║${NC}"
-    echo -e "${GREEN}║          ✔  INSTALAÇÃO CONCLUÍDA COM SUCESSO!                ║${NC}"
-    echo -e "${GREEN}║                                                              ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo
-    echo -e "${WHITE}${BOLD}🔑 TOKEN DE AUTENTICAÇÃO${NC}"
-    echo -e "┌──────────────────────────────────────────────────────────────┐"
-    echo -e "│ ${CYAN}$TOKEN${NC} │"
-    echo -e "└──────────────────────────────────────────────────────────────┘"
-    echo
-    echo -e "${YELLOW}⚠  IMPORTANTE: Guarde este token em local seguro!${NC}"
-    echo -e "${YELLOW}   Você precisará dele para conectar ao Ncloud Dashboard.${NC}"
-    echo
-    echo -e "${WHITE}${BOLD}📡 DADOS DE CONEXÃO${NC}"
-    echo -e "┌──────────────────────────────────────────────────────────────┐"
-    echo -e "│ Host:   ${CYAN}${LOCAL_IP}${NC}                                           │"
-    echo -e "│ Porta:  ${CYAN}${PORT}${NC}                                               │"
-    echo -e "│ Token:  ${CYAN}${TOKEN:0:20}...${NC}                          │"
-    echo -e "└──────────────────────────────────────────────────────────────┘"
-    echo
-    echo -e "${WHITE}${BOLD}📋 COMANDOS RÁPIDOS${NC}"
-    echo
-    echo -e "   ${CYAN}ncloud start${NC}     Iniciar o agent"
-    echo -e "   ${CYAN}ncloud stop${NC}      Parar o agent"
-    echo -e "   ${CYAN}ncloud restart${NC}   Reiniciar o agent"
-    echo -e "   ${CYAN}ncloud status${NC}    Ver status"
-    echo -e "   ${CYAN}ncloud logs${NC}      Ver logs em tempo real"
-    echo -e "   ${CYAN}ncloud menu${NC}      Abrir CLI interativo"
-    echo
-    echo -e "   ${WHITE}Dica:${NC} Use ${CYAN}sudo${NC} para comandos que alteram o serviço"
-    echo -e "   Exemplo: ${CYAN}sudo ncloud start${NC}"
-    echo
-    echo -e "${WHITE}${BOLD}🌐 PRÓXIMOS PASSOS${NC}"
-    echo
-    echo -e "   1. Acesse o Ncloud Dashboard"
-    echo -e "   2. Adicione uma nova conexão com os dados acima"
-    echo -e "   3. Use a CLI para detectar ambientes Protheus:"
-    echo -e "      ${CYAN}sudo ncloud-agent${NC}"
-    echo
-    echo -e "${WHITE}${BOLD}📚 Documentação:${NC} https://docs.neewecloud.com"
-    echo -e "${WHITE}${BOLD}💬 Suporte:${NC}      suporte@neewe.com.br"
-    echo
+    echo ""
+    print_line
+    echo ""
+    printf "${GREEN}"
+    cat << 'EOF'
+    ╔═══════════════════════════════════════════════════════════════════════════╗
+    ║                                                                           ║
+    ║              ✓   INSTALACAO CONCLUIDA COM SUCESSO!                        ║
+    ║                                                                           ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+EOF
+    printf "${RST}"
+    
+    print_section "Token de Autenticacao" "🔑"
+    echo ""
+    printf "     ${CYAN}%s${RST}\n" "$SAVED_TOKEN"
+    echo ""
+    msg_warn "Guarde este token em local seguro!"
+    msg_info "Voce precisara dele para conectar ao Ncloud Dashboard"
+    
+    print_section "Dados de Conexao" "📡"
+    echo ""
+    printf "     Host:   ${CYAN}%s${RST}\n" "$LOCAL_IP"
+    printf "     Porta:  ${CYAN}%s${RST}\n" "$SAVED_PORT"
+    printf "     URL:    ${CYAN}http://%s:%s${RST}\n" "$LOCAL_IP" "$SAVED_PORT"
+    
+    print_section "Comandos Rapidos" "⚡"
+    echo ""
+    printf "     ${CYAN}ncloud start${RST}      Iniciar o agent\n"
+    printf "     ${CYAN}ncloud stop${RST}       Parar o agent\n"
+    printf "     ${CYAN}ncloud restart${RST}    Reiniciar o agent\n"
+    printf "     ${CYAN}ncloud status${RST}     Ver status\n"
+    printf "     ${CYAN}ncloud logs${RST}       Ver logs em tempo real\n"
+    printf "     ${CYAN}ncloud menu${RST}       Abrir CLI interativo\n"
+    
+    print_section "Proximos Passos" "🚀"
+    echo ""
+    msg_info "1. Acesse o Ncloud Dashboard"
+    msg_info "2. Adicione uma nova conexao com os dados acima"
+    msg_info "3. Use ${CYAN}ncloud menu${RST} para detectar ambientes Protheus"
+    
+    echo ""
+    print_line
+    printf "  ${GRAY}Documentacao:${RST} ${CYAN}https://docs.neewecloud.com${RST}\n"
+    printf "  ${GRAY}Suporte:${RST}      ${CYAN}suporte@neewe.com.br${RST}\n"
+    print_line
+    echo ""
 }
+
+# ==============================================================================
+# DESINSTALACAO
+# ==============================================================================
 
 uninstall() {
-    print_banner
-    log_step "Desinstalando Ncloud Agent..."
+    print_header
     
-    # Parar serviço
+    print_section "Desinstalando Ncloud Agent" "🗑️"
+    echo ""
+    
+    # Parar servico
     if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
+        spinner_start "Parando servico"
         systemctl stop ${SERVICE_NAME}
-        log_info "Serviço parado"
+        spinner_stop
+        msg_ok "Servico parado"
     fi
     
-    # Desabilitar serviço
+    # Desabilitar servico
     if systemctl is-enabled --quiet ${SERVICE_NAME} 2>/dev/null; then
-        systemctl disable ${SERVICE_NAME}
-        log_info "Serviço desabilitado"
+        spinner_start "Desabilitando servico"
+        systemctl disable ${SERVICE_NAME} >/dev/null 2>&1
+        spinner_stop
+        msg_ok "Servico desabilitado"
     fi
     
     # Remover arquivos
+    spinner_start "Removendo arquivos"
     rm -f /etc/systemd/system/${SERVICE_NAME}.service
-    rm -f /usr/local/bin/ncloud-agent
     rm -f /usr/local/bin/ncloud
+    rm -f /usr/local/bin/ncloud-agent
     systemctl daemon-reload
+    spinner_stop
+    msg_ok "Arquivos de servico removidos"
     
-    if confirm "Remover diretório de instalação ($INSTALL_DIR)?" "y"; then
+    echo ""
+    if confirm "Remover diretorio de instalacao ($INSTALL_DIR)" "y"; then
         rm -rf "$INSTALL_DIR"
-        log_info "Diretório de instalação removido"
-    fi
-    
-    if confirm "Remover configurações ($CONFIG_DIR)?" "n"; then
-        rm -rf "$CONFIG_DIR"
-        log_info "Configurações removidas"
+        msg_ok "Diretorio de instalacao removido"
     else
-        log_info "Configurações mantidas em $CONFIG_DIR"
+        msg_skip "Diretorio de instalacao mantido"
     fi
     
-    echo
-    log_success "Ncloud Agent desinstalado com sucesso!"
-    echo
+    if confirm "Remover configuracoes ($CONFIG_DIR)" "n"; then
+        rm -rf "$CONFIG_DIR"
+        msg_ok "Configuracoes removidas"
+    else
+        msg_skip "Configuracoes mantidas em $CONFIG_DIR"
+    fi
+    
+    if confirm "Remover logs ($LOG_DIR)" "n"; then
+        rm -rf "$LOG_DIR"
+        msg_ok "Logs removidos"
+    else
+        msg_skip "Logs mantidos em $LOG_DIR"
+    fi
+    
+    echo ""
+    print_line
+    printf "  ${GREEN}✓${RST}  ${BOLD}Ncloud Agent desinstalado com sucesso!${RST}\n"
+    print_line
+    echo ""
 }
+
+# ==============================================================================
+# AJUDA
+# ==============================================================================
 
 show_help() {
-    echo "Ncloud Agent - Script de Instalação"
-    echo
-    echo "Uso:"
-    echo "  curl -fsSL https://get.neewecloud.com/install.sh | sudo bash"
-    echo "  curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- [opções]"
-    echo
-    echo "Opções:"
-    echo "  --uninstall     Desinstalar o agent"
-    echo "  --help          Mostrar esta ajuda"
-    echo
-    echo "Exemplos:"
-    echo "  # Instalação interativa"
-    echo "  curl -fsSL https://get.neewecloud.com/install.sh | sudo bash"
-    echo
-    echo "  # Desinstalar"
-    echo "  curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- --uninstall"
-    echo
+    print_header
+    
+    print_section "Uso" "📖"
+    echo ""
+    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash\n"
+    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- ${CYAN}[opcoes]${RST}\n"
+    
+    print_section "Opcoes" "⚙️"
+    echo ""
+    printf "     ${CYAN}--uninstall${RST}    Desinstalar o agent\n"
+    printf "     ${CYAN}--help${RST}         Mostrar esta ajuda\n"
+    
+    print_section "Exemplos" "💡"
+    echo ""
+    printf "     ${GRAY}# Instalacao interativa${RST}\n"
+    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash\n"
+    echo ""
+    printf "     ${GRAY}# Desinstalar${RST}\n"
+    printf "     curl -fsSL https://get.neewecloud.com/install.sh | sudo bash -s -- --uninstall\n"
+    
+    echo ""
+    print_line
+    echo ""
 }
 
-# ============================================================================
+# ==============================================================================
+# CLEANUP
+# ==============================================================================
+
+cleanup() {
+    spinner_stop
+    echo ""
+    printf "  ${YELLOW}⚠${RST}  ${YELLOW}Instalacao interrompida${RST}\n"
+    echo ""
+    exit 130
+}
+
+trap cleanup SIGINT SIGTERM
+
+# ==============================================================================
 # MAIN
-# ============================================================================
+# ==============================================================================
 
 main() {
     # Parse argumentos
     while [[ $# -gt 0 ]]; do
         case $1 in
             --uninstall)
+                print_header
+                print_step 1 1 "Verificando Permissoes"
                 check_root
                 uninstall
                 exit 0
@@ -472,71 +693,55 @@ main() {
                 exit 0
                 ;;
             *)
-                log_error "Opção desconhecida: $1"
+                msg_fail "Opcao desconhecida: $1"
                 show_help
                 exit 1
                 ;;
         esac
     done
     
-    print_banner
+    print_header
+    
+    print_step 1 5 "Verificando Sistema"
     check_root
     check_os
     
-    # Verificar git
-    if ! command -v git &> /dev/null; then
-        log_info "Instalando git..."
-        if command -v apt-get &> /dev/null; then
-            apt-get update && apt-get install -y git
-        elif command -v yum &> /dev/null; then
-            yum install -y git
-        fi
-    fi
-    
-    # Node.js
-    if ! check_node; then
-        if confirm "Node.js 20+ não encontrado. Instalar automaticamente?" "y"; then
-            install_node
-        else
-            log_error "Node.js 20+ é necessário para executar o Ncloud Agent"
-            exit 1
-        fi
-    fi
-    
-    # Verificar instalação existente
-    if [ -d "$INSTALL_DIR" ]; then
-        echo
-        log_warning "Instalação existente detectada em $INSTALL_DIR"
-        if confirm "Deseja reinstalar?" "y"; then
+    # Verificar instalacao existente
+    if [[ -d "$INSTALL_DIR" ]]; then
+        echo ""
+        msg_warn "Instalacao existente detectada em ${CYAN}$INSTALL_DIR${RST}"
+        if confirm "Deseja reinstalar" "y"; then
+            spinner_start "Parando servico existente"
             systemctl stop ${SERVICE_NAME} 2>/dev/null || true
+            spinner_stop
+            
+            spinner_start "Removendo instalacao anterior"
             rm -rf "$INSTALL_DIR"
+            spinner_stop
+            msg_ok "Instalacao anterior removida"
         else
-            log_info "Instalação cancelada"
+            msg_info "Instalacao cancelada"
+            echo ""
             exit 0
         fi
     fi
     
-    # Instalar
-    download_release
-    create_config
-    create_service
-    install_ncloud_wrapper
-    
-    # Iniciar serviço
-    log_step "Iniciando serviço..."
-    systemctl start ${SERVICE_NAME}
-    sleep 3
-    
-    if systemctl is-active --quiet ${SERVICE_NAME}; then
-        log_success "Serviço iniciado com sucesso!"
-    else
-        log_warning "O serviço pode não ter iniciado corretamente"
-        log_info "Verifique os logs: sudo journalctl -u ncloud-agent -n 50"
+    # Verificar Node.js
+    if ! check_node; then
+        echo ""
+        if confirm "Node.js 20+ nao encontrado. Instalar automaticamente" "y"; then
+            install_node
+        else
+            msg_fail "Node.js 20+ e necessario para executar o Ncloud Agent"
+            exit 1
+        fi
     fi
     
-    # Mostrar resultado
-    show_result
+    # Instalar
+    download_agent
+    configure_agent
+    create_service
+    show_success
 }
 
 main "$@"
-
