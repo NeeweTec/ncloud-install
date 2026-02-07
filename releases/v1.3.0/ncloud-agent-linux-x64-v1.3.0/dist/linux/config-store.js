@@ -50,9 +50,22 @@ const events_1 = require("events");
 // ============================================================================
 // CONFIGURAÇÃO PADRÃO
 // ============================================================================
-const CONFIG_DIR = process.env.NCLOUD_CONFIG
-    ? path.dirname(process.env.NCLOUD_CONFIG)
-    : path.join(os.homedir(), '.ncloud-agent');
+// Em Linux, prioriza /etc/ncloud-agent (usado pelo daemon via systemd)
+// Fallback para ~/.ncloud-agent apenas se /etc não existir
+function getDefaultConfigDir() {
+    // 1. Se NCLOUD_CONFIG está definido, usa o diretório dele
+    if (process.env.NCLOUD_CONFIG) {
+        return path.dirname(process.env.NCLOUD_CONFIG);
+    }
+    // 2. Em Linux, prioriza /etc/ncloud-agent se existir
+    const etcConfig = '/etc/ncloud-agent';
+    if (process.platform === 'linux' && fs.existsSync(etcConfig)) {
+        return etcConfig;
+    }
+    // 3. Fallback para home do usuário
+    return path.join(os.homedir(), '.ncloud-agent');
+}
+const CONFIG_DIR = getDefaultConfigDir();
 exports.CONFIG_DIR = CONFIG_DIR;
 const CONFIG_FILE = process.env.NCLOUD_CONFIG || path.join(CONFIG_DIR, 'config.json');
 exports.CONFIG_FILE = CONFIG_FILE;

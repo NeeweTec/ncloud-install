@@ -54,27 +54,57 @@ print_line() {
     echo "${GRAY}────────────────────────────────────────────────────────────────────────────────${RST}"
 }
 
+# print_header() {
+#     clear
+#     echo ""
+#     echo "${CYAN}"
+#     cat << 'EOF'
+#     ╔═══════════════════════════════════════════════════════════════════════════╗
+#     ║                                                                           ║
+#     ║     ███╗   ██╗ ██████╗██╗      ██████╗ ██╗   ██╗██████╗                   ║
+#     ║     ████╗  ██║██╔════╝██║     ██╔═══██╗██║   ██║██╔══██╗                  ║
+#     ║     ██╔██╗ ██║██║     ██║     ██║   ██║██║   ██║██║  ██║                  ║
+#     ║     ██║╚██╗██║██║     ██║     ██║   ██║██║   ██║██║  ██║                  ║
+#     ║     ██║ ╚████║╚██████╗███████╗╚██████╔╝╚██████╔╝██████╔╝                  ║
+#     ║     ╚═╝  ╚═══╝ ╚═════╝╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝                   ║
+#     ║                                                                           ║
+#     ╚═══════════════════════════════════════════════════════════════════════════╝
+# EOF
+#     echo "${RST}"
+#     echo ""
+#     echo "  ${BOLD}${WHITE}AGENT INSTALLER${RST} ${GRAY}|${RST} v${INSTALLER_VERSION} ${GRAY}|${RST} Protheus Service Manager"
+#     echo "  ${GRAY}NEEWE Tecnologia${RST}"
+#     print_line
+#     echo ""
+# }
+
 print_header() {
+    # Cores (Palette Premium)
+    local BLUE='\033[0;34m'
+    local CYAN='\033[1;36m'
+    local WHITE='\033[1;37m'
+    local GRAY='\033[0;10m'
+    local DARK_GRAY='\033[1;30m'
+    local GREEN='\033[0;32m'
+    local RST='\033[0m'
+
     clear
     echo ""
-    echo "${CYAN}"
-    cat << 'EOF'
-    ╔═══════════════════════════════════════════════════════════════════════════╗
-    ║                                                                           ║
-    ║     ███╗   ██╗ ██████╗██╗      ██████╗ ██╗   ██╗██████╗                   ║
-    ║     ████╗  ██║██╔════╝██║     ██╔═══██╗██║   ██║██╔══██╗                  ║
-    ║     ██╔██╗ ██║██║     ██║     ██║   ██║██║   ██║██║  ██║                  ║
-    ║     ██║╚██╗██║██║     ██║     ██║   ██║██║   ██║██║  ██║                  ║
-    ║     ██║ ╚████║╚██████╗███████╗╚██████╔╝╚██████╔╝██████╔╝                  ║
-    ║     ╚═╝  ╚═══╝ ╚═════╝╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝                   ║
-    ║                                                                           ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
-EOF
-    echo "${RST}"
+    # Logo construído manualmente para precisão geométrica e espaçamento (kerning) perfeito
+    echo -e "${BLUE}  █${RST}  ${WHITE}N C L O U D${RST}"
+    echo -e "${BLUE}  █${RST}  ${GRAY}Protheus Service Manager${RST}"
     echo ""
-    echo "  ${BOLD}${WHITE}AGENT INSTALLER${RST} ${GRAY}|${RST} v${INSTALLER_VERSION} ${GRAY}|${RST} Protheus Service Manager"
-    echo "  ${GRAY}NEEWE Tecnologia${RST}"
-    print_line
+    
+    # Linha divisória fina e elegante
+    echo -e "  ${DARK_GRAY}──────────────────────────────────────────────${RST}"
+    
+    # Bloco de Informações com Ícones e Hierarquia
+    echo ""
+    echo -e "  ${GRAY}AGENT STATUS${RST}      ${GREEN}● Online${RST}"
+    echo -e "  ${GRAY}VERSION${RST}           ${WHITE}v${INSTALLER_VERSION:-1.0.0}${RST}"
+    echo -e "  ${GRAY}PROVIDER${RST}          ${WHITE}NEEWE Tecnologia${RST}"
+    echo ""
+    echo -e "  ${DARK_GRAY}──────────────────────────────────────────────${RST}"
     echo ""
 }
 
