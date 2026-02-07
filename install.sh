@@ -132,19 +132,16 @@ generate_token() {
 download_release() {
     log_step "Baixando última versão..."
     
-    # Obter URL da última release
-    local release_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
-    local download_url=$(curl -s "$release_url" | grep "browser_download_url.*linux.*tar.gz\"" | head -1 | cut -d'"' -f4)
+    # Versão atual
+    local VERSION="1.3.0"
+    local DOWNLOAD_URL="https://get.neewecloud.com/releases/v${VERSION}/ncloud-agent-linux-x64-v${VERSION}.tar.gz"
     
-    if [ -z "$download_url" ]; then
-        log_warning "Release não encontrada no GitHub"
-        log_info "Clonando repositório diretamente..."
-        install_from_source
-        return
+    log_info "Baixando: $DOWNLOAD_URL"
+    
+    if ! curl -fsSL "$DOWNLOAD_URL" -o /tmp/ncloud-agent.tar.gz; then
+        log_error "Falha ao baixar o agente"
+        exit 1
     fi
-    
-    log_info "Baixando: $download_url"
-    curl -fsSL "$download_url" -o /tmp/ncloud-agent.tar.gz
     
     mkdir -p "$INSTALL_DIR"
     tar -xzf /tmp/ncloud-agent.tar.gz -C "$INSTALL_DIR" --strip-components=1
