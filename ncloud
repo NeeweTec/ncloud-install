@@ -1,0 +1,251 @@
+#!/bin/bash
+# ============================================================================
+# NCLOUD - CLI Wrapper
+# 
+# Comandos simplificados para gerenciar o Ncloud Agent
+#
+# Uso:
+#   ncloud [comando]
+#
+# Comandos:
+#   start      Iniciar o agent
+#   stop       Parar o agent
+#   restart    Reiniciar o agent
+#   status     Ver status do serviço
+#   logs       Ver logs em tempo real
+#   config     Editar configuração
+#   menu       Abrir CLI interativo
+#   version    Ver versão instalada
+#   update     Atualizar para última versão
+#   uninstall  Desinstalar o agent
+#   help       Mostrar esta ajuda
+#
+# Copyright (c) 2026 NEEWE
+# ============================================================================
+
+SERVICE_NAME="ncloud-agent"
+CONFIG_FILE="/etc/ncloud-agent/config.json"
+INSTALL_DIR="/opt/ncloud-agent"
+
+# Cores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+# Verificar root para comandos que precisam
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "${RED}✖${NC} Este comando precisa de permissões de root"
+        echo -e "  Execute: ${CYAN}sudo ncloud $1${NC}"
+        exit 1
+    fi
+}
+
+# Comandos
+cmd_start() {
+    check_root "start"
+    echo -e "${BLUE}▸${NC} Iniciando Ncloud Agent..."
+    systemctl start $SERVICE_NAME
+    sleep 1
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        echo -e "${GREEN}✔${NC} Agent iniciado com sucesso!"
+    else
+        echo -e "${RED}✖${NC} Falha ao iniciar. Verifique os logs: ${CYAN}ncloud logs${NC}"
+    fi
+}
+
+cmd_stop() {
+    check_root "stop"
+    echo -e "${BLUE}▸${NC} Parando Ncloud Agent..."
+    systemctl stop $SERVICE_NAME
+    echo -e "${GREEN}✔${NC} Agent parado"
+}
+
+cmd_restart() {
+    check_root "restart"
+    echo -e "${BLUE}▸${NC} Reiniciando Ncloud Agent..."
+    systemctl restart $SERVICE_NAME
+    sleep 1
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        echo -e "${GREEN}✔${NC} Agent reiniciado com sucesso!"
+    else
+        echo -e "${RED}✖${NC} Falha ao reiniciar. Verifique os logs: ${CYAN}ncloud logs${NC}"
+    fi
+}
+
+cmd_status() {
+    echo -e "${BOLD}NCLOUD AGENT STATUS${NC}"
+    echo
+    
+    # Status do serviço
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        echo -e "  Serviço:  ${GREEN}● Rodando${NC}"
+    else
+        echo -e "  Serviço:  ${RED}○ Parado${NC}"
+    fi
+    
+    # Enabled?
+    if systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null; then
+        echo -e "  Autostart: ${GREEN}Habilitado${NC}"
+    else
+        echo -e "  Autostart: ${YELLOW}Desabilitado${NC}"
+    fi
+    
+    # Porta e versão
+    if [ -f "$CONFIG_FILE" ]; then
+        PORT=$(grep -o '"port":[^,}]*' "$CONFIG_FILE" | head -1 | grep -o '[0-9]*')
+        echo -e "  Porta:    ${CYAN}${PORT:-3100}${NC}"
+    fi
+    
+    # PID
+    PID=$(systemctl show --property MainPID --value $SERVICE_NAME 2>/dev/null)
+    if [ "$PID" != "0" ] && [ -n "$PID" ]; then
+        echo -e "  PID:      ${CYAN}$PID${NC}"
+        
+        # Memória
+        if [ -f "/proc/$PID/status" ]; then
+            MEM=$(grep VmRSS /proc/$PID/status 2>/dev/null | awk '{print $2}')
+            if [ -n "$MEM" ]; then
+                MEM_MB=$((MEM / 1024))
+                echo -e "  Memória:  ${CYAN}${MEM_MB} MB${NC}"
+            fi
+        fi
+    fi
+    
+    # IP
+    IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    if [ -n "$IP" ]; then
+        echo -e "  Acesso:   ${CYAN}http://${IP}:${PORT:-3100}${NC}"
+    fi
+    
+    echo
+}
+
+cmd_logs() {
+    echo -e "${BLUE}▸${NC} Mostrando logs (Ctrl+C para sair)..."
+    echo
+    journalctl -u $SERVICE_NAME -f --no-hostname -o cat
+}
+
+cmd_config() {
+    check_root "config"
+    if [ -f "$CONFIG_FILE" ]; then
+        if command -v nano &> /dev/null; then
+            nano "$CONFIG_FILE"
+        elif command -v vim &> /dev/null; then
+            vim "$CONFIG_FILE"
+        else
+            vi "$CONFIG_FILE"
+        fi
+        echo -e "${YELLOW}⚠${NC} Reinicie o agent para aplicar: ${CYAN}ncloud restart${NC}"
+    else
+        echo -e "${RED}✖${NC} Arquivo de configuração não encontrado"
+    fi
+}
+
+cmd_menu() {
+    check_root "menu"
+    if [ -f "$INSTALL_DIR/dist/linux/cli.js" ]; then
+        node "$INSTALL_DIR/dist/linux/cli.js"
+    else
+        echo -e "${RED}✖${NC} CLI não encontrado. O agent está instalado?"
+    fi
+}
+
+cmd_version() {
+    if [ -f "$INSTALL_DIR/package.json" ]; then
+        VERSION=$(grep -o '"version":[^,}]*' "$INSTALL_DIR/package.json" | head -1 | cut -d'"' -f4)
+        echo -e "Ncloud Agent ${CYAN}v${VERSION}${NC}"
+    else
+        echo -e "${YELLOW}Versão desconhecida${NC}"
+    fi
+}
+
+cmd_update() {
+    check_root "update"
+    echo -e "${BLUE}▸${NC} Atualizando Ncloud Agent..."
+    curl -fsSL https://get.neewecloud.com/install.sh | bash
+}
+
+cmd_uninstall() {
+    check_root "uninstall"
+    curl -fsSL https://get.neewecloud.com/install.sh | bash -s -- --uninstall
+}
+
+cmd_help() {
+    echo -e "${BOLD}NCLOUD${NC} - CLI para gerenciar o Ncloud Agent"
+    echo
+    echo -e "${BOLD}USO:${NC}"
+    echo "  ncloud [comando]"
+    echo
+    echo -e "${BOLD}COMANDOS:${NC}"
+    echo -e "  ${CYAN}start${NC}      Iniciar o agent"
+    echo -e "  ${CYAN}stop${NC}       Parar o agent"
+    echo -e "  ${CYAN}restart${NC}    Reiniciar o agent"
+    echo -e "  ${CYAN}status${NC}     Ver status do serviço"
+    echo -e "  ${CYAN}logs${NC}       Ver logs em tempo real"
+    echo -e "  ${CYAN}config${NC}     Editar configuração"
+    echo -e "  ${CYAN}menu${NC}       Abrir CLI interativo"
+    echo -e "  ${CYAN}version${NC}    Ver versão instalada"
+    echo -e "  ${CYAN}update${NC}     Atualizar para última versão"
+    echo -e "  ${CYAN}uninstall${NC}  Desinstalar o agent"
+    echo -e "  ${CYAN}help${NC}       Mostrar esta ajuda"
+    echo
+    echo -e "${BOLD}EXEMPLOS:${NC}"
+    echo "  sudo ncloud start     # Iniciar o agent"
+    echo "  ncloud status         # Ver status"
+    echo "  ncloud logs           # Ver logs"
+    echo "  sudo ncloud menu      # Abrir CLI interativo"
+    echo
+}
+
+# Main
+case "${1:-help}" in
+    start)
+        cmd_start
+        ;;
+    stop)
+        cmd_stop
+        ;;
+    restart)
+        cmd_restart
+        ;;
+    status|st)
+        cmd_status
+        ;;
+    logs|log|l)
+        cmd_logs
+        ;;
+    config|cfg)
+        cmd_config
+        ;;
+    menu|m|"")
+        if [ -z "$1" ]; then
+            cmd_help
+        else
+            cmd_menu
+        fi
+        ;;
+    version|v|-v|--version)
+        cmd_version
+        ;;
+    update|upgrade)
+        cmd_update
+        ;;
+    uninstall|remove)
+        cmd_uninstall
+        ;;
+    help|h|-h|--help)
+        cmd_help
+        ;;
+    *)
+        echo -e "${RED}✖${NC} Comando desconhecido: $1"
+        echo -e "  Execute ${CYAN}ncloud help${NC} para ver os comandos disponíveis"
+        exit 1
+        ;;
+esac
+

@@ -314,6 +314,40 @@ EOF
     log_success "Serviço criado e habilitado"
 }
 
+install_ncloud_wrapper() {
+    log_step "Instalando CLI wrapper 'ncloud'..."
+    
+    # Baixar wrapper do repositório
+    WRAPPER_URL="https://raw.githubusercontent.com/NeeweTec/ncloud-install/main/ncloud"
+    
+    if curl -fsSL "$WRAPPER_URL" -o /usr/local/bin/ncloud 2>/dev/null; then
+        chmod +x /usr/local/bin/ncloud
+        log_success "Comando 'ncloud' instalado"
+    else
+        # Fallback: criar inline
+        cat > /usr/local/bin/ncloud << 'WRAPPER_EOF'
+#!/bin/bash
+SERVICE_NAME="ncloud-agent"
+CONFIG_FILE="/etc/ncloud-agent/config.json"
+INSTALL_DIR="/opt/ncloud-agent"
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'; BOLD='\033[1m'
+check_root() { [ "$EUID" -ne 0 ] && echo -e "${RED}✖${NC} Execute: ${CYAN}sudo ncloud $1${NC}" && exit 1; }
+case "${1:-help}" in
+    start) check_root start; systemctl start $SERVICE_NAME && echo -e "${GREEN}✔${NC} Agent iniciado" ;;
+    stop) check_root stop; systemctl stop $SERVICE_NAME && echo -e "${GREEN}✔${NC} Agent parado" ;;
+    restart) check_root restart; systemctl restart $SERVICE_NAME && echo -e "${GREEN}✔${NC} Agent reiniciado" ;;
+    status|st) systemctl status $SERVICE_NAME --no-pager ;;
+    logs|log|l) journalctl -u $SERVICE_NAME -f --no-hostname -o cat ;;
+    menu|m) check_root menu; node "$INSTALL_DIR/dist/linux/cli.js" ;;
+    version|v) grep -o '"version":[^,}]*' "$INSTALL_DIR/package.json" 2>/dev/null | cut -d'"' -f4 | xargs -I{} echo "Ncloud Agent v{}" ;;
+    *) echo -e "${BOLD}ncloud${NC} - start|stop|restart|status|logs|menu|version"; echo "Execute: ${CYAN}ncloud [comando]${NC}" ;;
+esac
+WRAPPER_EOF
+        chmod +x /usr/local/bin/ncloud
+        log_success "Comando 'ncloud' instalado (fallback)"
+    fi
+}
+
 show_result() {
     # Detectar IP
     LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
@@ -340,19 +374,17 @@ show_result() {
     echo -e "│ Token:  ${CYAN}${TOKEN:0:20}...${NC}                          │"
     echo -e "└──────────────────────────────────────────────────────────────┘"
     echo
-    echo -e "${WHITE}${BOLD}📋 COMANDOS ÚTEIS${NC}"
+    echo -e "${WHITE}${BOLD}📋 COMANDOS RÁPIDOS${NC}"
     echo
-    echo -e "   ${WHITE}Gerenciar serviço:${NC}"
-    echo -e "   ${CYAN}sudo systemctl start ncloud-agent${NC}    # Iniciar"
-    echo -e "   ${CYAN}sudo systemctl stop ncloud-agent${NC}     # Parar"
-    echo -e "   ${CYAN}sudo systemctl restart ncloud-agent${NC}  # Reiniciar"
-    echo -e "   ${CYAN}sudo systemctl status ncloud-agent${NC}   # Ver status"
+    echo -e "   ${CYAN}ncloud start${NC}     Iniciar o agent"
+    echo -e "   ${CYAN}ncloud stop${NC}      Parar o agent"
+    echo -e "   ${CYAN}ncloud restart${NC}   Reiniciar o agent"
+    echo -e "   ${CYAN}ncloud status${NC}    Ver status"
+    echo -e "   ${CYAN}ncloud logs${NC}      Ver logs em tempo real"
+    echo -e "   ${CYAN}ncloud menu${NC}      Abrir CLI interativo"
     echo
-    echo -e "   ${WHITE}Ver logs:${NC}"
-    echo -e "   ${CYAN}sudo journalctl -u ncloud-agent -f${NC}   # Logs em tempo real"
-    echo
-    echo -e "   ${WHITE}CLI interativo:${NC}"
-    echo -e "   ${CYAN}sudo ncloud-agent${NC}                    # Abrir menu"
+    echo -e "   ${WHITE}Dica:${NC} Use ${CYAN}sudo${NC} para comandos que alteram o serviço"
+    echo -e "   Exemplo: ${CYAN}sudo ncloud start${NC}"
     echo
     echo -e "${WHITE}${BOLD}🌐 PRÓXIMOS PASSOS${NC}"
     echo
@@ -385,6 +417,7 @@ uninstall() {
     # Remover arquivos
     rm -f /etc/systemd/system/${SERVICE_NAME}.service
     rm -f /usr/local/bin/ncloud-agent
+    rm -f /usr/local/bin/ncloud
     systemctl daemon-reload
     
     if confirm "Remover diretório de instalação ($INSTALL_DIR)?" "y"; then
@@ -490,6 +523,7 @@ main() {
     download_release
     create_config
     create_service
+    install_ncloud_wrapper
     
     # Iniciar serviço
     log_step "Iniciando serviço..."
