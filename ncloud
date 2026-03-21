@@ -15,6 +15,7 @@
 #   logs       Ver logs em tempo real
 #   config     Editar configuração
 #   menu       Abrir CLI interativo
+#   instances  Listar instâncias Protheus detectadas
 #   version    Ver versão instalada
 #   update     Atualizar para última versão
 #   uninstall  Desinstalar o agent
@@ -165,6 +166,42 @@ cmd_version() {
     fi
 }
 
+cmd_instances() {
+    echo -e "${BOLD}INSTÂNCIAS PROTHEUS DETECTADAS${NC}"
+    echo
+
+    # Obtém porta da config
+    PORT=3100
+    if [ -f "$CONFIG_FILE" ]; then
+        CONF_PORT=$(grep -o '"port":[^,}]*' "$CONFIG_FILE" | head -1 | grep -o '[0-9]*')
+        [ -n "$CONF_PORT" ] && PORT=$CONF_PORT
+    fi
+
+    # Obtém token da config
+    TOKEN=""
+    if [ -f "$CONFIG_FILE" ]; then
+        TOKEN=$(grep -o '"token":"[^"]*"' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
+    fi
+
+    if [ -z "$TOKEN" ] || [ "$TOKEN" = "***REDACTED***" ]; then
+        echo -e "${RED}✖${NC} Token não encontrado na configuração"
+        echo -e "  Configure o token no arquivo: ${CYAN}$CONFIG_FILE${NC}"
+        return 1
+    fi
+
+    # Chama a API do agent
+    RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:$PORT/instances" 2>/dev/null)
+
+    if [ $? -ne 0 ] || [ -z "$RESPONSE" ]; then
+        echo -e "${RED}✖${NC} Não foi possível conectar ao agent na porta $PORT"
+        echo -e "  Verifique se o agent está rodando: ${CYAN}ncloud status${NC}"
+        return 1
+    fi
+
+    echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
+    echo
+}
+
 cmd_update() {
     check_root "update"
     echo -e "${BLUE}▸${NC} Atualizando Ncloud Agent..."
@@ -190,6 +227,7 @@ cmd_help() {
     echo -e "  ${CYAN}logs${NC}       Ver logs em tempo real"
     echo -e "  ${CYAN}config${NC}     Editar configuração"
     echo -e "  ${CYAN}menu${NC}       Abrir CLI interativo"
+    echo -e "  ${CYAN}instances${NC}  Listar instâncias Protheus detectadas"
     echo -e "  ${CYAN}version${NC}    Ver versão instalada"
     echo -e "  ${CYAN}update${NC}     Atualizar para última versão"
     echo -e "  ${CYAN}uninstall${NC}  Desinstalar o agent"
@@ -238,6 +276,9 @@ case "${1:-help}" in
         ;;
     uninstall|remove)
         cmd_uninstall
+        ;;
+    instances|inst)
+        cmd_instances
         ;;
     help|h|-h|--help)
         cmd_help
