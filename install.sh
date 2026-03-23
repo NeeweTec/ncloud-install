@@ -13,8 +13,8 @@ set -o pipefail
 # ==============================================================================
 
 # Usar nome diferente para evitar conflito com /etc/os-release
-INSTALLER_VERSION="1.3.0"
-AGENT_VERSION="1.3.0"
+INSTALLER_VERSION="1.4.0"
+AGENT_VERSION="1.4.0"
 
 # Cores ANSI
 RST=$'\033[0m'
@@ -387,7 +387,7 @@ configure_agent() {
   "auth": {
     "token": "${TOKEN}"
   },
-  "environments": [],
+  "services": [],
   "instances": [],
   "scanPaths": ${SCAN_PATHS},
   "autoStart": true,
@@ -638,7 +638,7 @@ EOF
     echo ""
     msg_info "1. Acesse o Ncloud Dashboard"
     msg_info "2. Adicione uma nova conexao com os dados acima"
-    msg_info "3. Use ${CYAN}ncloud menu${RST} para detectar ambientes Protheus"
+    msg_info "3. Use ${CYAN}ncloud menu${RST} para detectar serviços Protheus"
     
     echo ""
     print_line

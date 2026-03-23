@@ -276,14 +276,14 @@ async function getPidByPort(port) {
     catch { }
     return undefined;
 }
-async function getServiceStatus(env) {
-    let ini = parseIniFile(env.iniPath);
-    let port = env.port || detectServicePort(ini, env.type);
-    if (port === 0 && env.type === 'license') {
-        const altPath = path.join(env.rootPath, 'appserver.ini');
+async function getServiceStatus(svc) {
+    let ini = parseIniFile(svc.iniPath);
+    let port = svc.port || detectServicePort(ini, svc.type);
+    if (port === 0 && svc.type === 'license') {
+        const altPath = path.join(svc.rootPath, 'appserver.ini');
         if (fs.existsSync(altPath)) {
             const altIni = parseIniFile(altPath);
-            port = detectServicePort(altIni, env.type);
+            port = detectServicePort(altIni, svc.type);
         }
     }
     if (port > 0) {
@@ -364,7 +364,7 @@ async function stopService(env) {
         return { success: false, message: `Erro: ${error}` };
     }
 }
-function createEnvironment(name, displayName, rootPath, iniPath, type) {
+function createDetectedService(name, displayName, rootPath, iniPath, type) {
     const now = new Date().toISOString();
     return {
         id: crypto.randomUUID(),
@@ -394,14 +394,14 @@ function scanDirectory(dirPath, depth = 0, maxDepth = 5) {
             if (isLicense) {
                 const baseName = path.basename(dirPath).toLowerCase().replace(/\s+/g, '-');
                 const parentName = path.basename(path.dirname(dirPath)).toLowerCase().replace(/\s+/g, '-');
-                result.licenses.push(createEnvironment(`license-${parentName}-${baseName}`, `License Server - ${path.basename(path.dirname(dirPath))}`, dirPath, files.includes('licenseserver.ini') ? path.join(dirPath, 'licenseserver.ini') : iniPath, 'license'));
+                result.licenses.push(createDetectedService(`license-${parentName}-${baseName}`, `License Server - ${path.basename(path.dirname(dirPath))}`, dirPath, files.includes('licenseserver.ini') ? path.join(dirPath, 'licenseserver.ini') : iniPath, 'license'));
             }
             else {
-                result.appservers.push(createEnvironment(path.basename(dirPath).toLowerCase().replace(/\s+/g, '-'), `${path.basename(dirPath)} (${path.basename(path.dirname(dirPath))})`, dirPath, iniPath, 'appserver'));
+                result.appservers.push(createDetectedService(path.basename(dirPath).toLowerCase().replace(/\s+/g, '-'), `${path.basename(dirPath)} (${path.basename(path.dirname(dirPath))})`, dirPath, iniPath, 'appserver'));
             }
         }
         if ((files.includes('dbaccess64') || files.includes('dbaccess')) && files.includes('dbaccess.ini')) {
-            result.dbaccess.push(createEnvironment(path.basename(dirPath).toLowerCase().replace(/\s+/g, '-'), `DbAccess - ${path.basename(path.dirname(dirPath))}`, dirPath, path.join(dirPath, 'dbaccess.ini'), 'dbaccess'));
+            result.dbaccess.push(createDetectedService(path.basename(dirPath).toLowerCase().replace(/\s+/g, '-'), `DbAccess - ${path.basename(path.dirname(dirPath))}`, dirPath, path.join(dirPath, 'dbaccess.ini'), 'dbaccess'));
         }
         for (const dir of dirs) {
             const skipDirs = ['node_modules', '.git', 'system', 'spool', 'log', 'data', 'profile', 'cache'];
@@ -437,39 +437,56 @@ function close() {
 async function showMainMenu(config) {
     while (true) {
         printHeader();
-        console.log(`  ${c.bold}${c.white}MENU PRINCIPAL${c.reset}`);
+        // Resumo rápido do estado
+        let totalServices = config.services.length;
+        let totalRunning = 0;
+        for (const svc of config.services.filter(s => s.enabled)) {
+            const st = await getServiceStatus(svc);
+            if (st.status === 'running')
+                totalRunning++;
+        }
+        const statusSummary = totalServices === 0
+            ? `${c.dim}Nenhum serviço configurado${c.reset}`
+            : totalRunning === totalServices
+                ? `${c.green}● ${totalRunning}/${totalServices} ativos${c.reset}`
+                : totalRunning > 0
+                    ? `${c.yellow}◐ ${totalRunning}/${totalServices} ativos${c.reset}`
+                    : `${c.red}○ ${totalRunning}/${totalServices} ativos${c.reset}`;
+        console.log(`  ${c.bold}${c.white}NCLOUD AGENT${c.reset}  ${c.dim}v${VERSION}${c.reset}  ${statusSummary}`);
         console.log();
-        console.log(`     ${c.white}1${c.reset}   ${c.cyan}Gerenciar Serviços${c.reset}`);
-        console.log(`     ${c.white}2${c.reset}   ${c.cyan}Status dos Serviços${c.reset}`);
-        console.log(`     ${c.white}3${c.reset}   ${c.cyan}Gerenciar Instâncias${c.reset}`);
-        console.log(`     ${c.white}4${c.reset}   ${c.cyan}Ver Environments (INI)${c.reset}`);
-        console.log(`     ${c.white}5${c.reset}   ${c.cyan}Configurar Ambientes${c.reset}`);
-        console.log(`     ${c.white}6${c.reset}   ${c.cyan}Auto-detectar Ambientes${c.reset}`);
-        console.log(`     ${c.white}7${c.reset}   ${c.cyan}Configurações da API${c.reset}`);
-        console.log(`     ${c.white}8${c.reset}   ${c.cyan}Gerenciar Webhooks${c.reset}`);
-        console.log(`     ${c.white}9${c.reset}   ${c.cyan}Iniciar/Parar Daemon${c.reset}`);
-        console.log();
+        printLine();
+        console.log(`     ${c.white}1${c.reset}   ${c.cyan}☁  Instâncias Protheus${c.reset}       ${c.dim}Grupos: DEV, QA, PROD${c.reset}`);
+        console.log(`     ${c.white}2${c.reset}   ${c.cyan}⚡ Gerenciar Serviços${c.reset}        ${c.dim}AppServer, DBAccess, License${c.reset}`);
+        console.log(`     ${c.white}3${c.reset}   ${c.cyan}📋 Status dos Serviços${c.reset}       ${c.dim}Visão geral${c.reset}`);
+        console.log(`     ${c.white}4${c.reset}   ${c.cyan}🗂  Ambientes INI${c.reset}             ${c.dim}Seções [ENV] dos appserver.ini${c.reset}`);
+        printLine();
+        console.log(`     ${c.white}5${c.reset}   ${c.cyan}🔍 Auto-detectar Serviços${c.reset}    ${c.dim}Scan de diretórios${c.reset}`);
+        console.log(`     ${c.white}6${c.reset}   ${c.cyan}🛠  Configurar Serviços${c.reset}      ${c.dim}Adicionar/editar manualmente${c.reset}`);
+        console.log(`     ${c.white}7${c.reset}   ${c.cyan}⚙  Configurações da API${c.reset}     ${c.dim}Porta, host, token${c.reset}`);
+        console.log(`     ${c.white}8${c.reset}   ${c.cyan}🔗 Gerenciar Webhooks${c.reset}       ${c.dim}Notificações de eventos${c.reset}`);
+        console.log(`     ${c.white}9${c.reset}   ${c.cyan}🔄 Controle do Daemon${c.reset}       ${c.dim}Iniciar/parar, systemd${c.reset}`);
+        printLine();
         console.log(`     ${c.white}0${c.reset}   ${c.dim}Sair${c.reset}`);
         console.log();
         const choice = await prompt(`  Selecione: `);
         switch (choice) {
             case '1':
-                await showServicesMenu(config);
+                await showInstancesMenu(config);
                 break;
             case '2':
-                await showStatusMenu(config);
+                await showServicesMenu(config);
                 break;
             case '3':
-                await showInstancesMenu(config);
+                await showStatusMenu(config);
                 break;
             case '4':
                 await showIniEnvironmentsMenu(config);
                 break;
             case '5':
-                await showEnvironmentsMenu(config);
+                await runAutoDetect(config);
                 break;
             case '6':
-                await runAutoDetect(config);
+                await showServicesConfigMenu(config);
                 break;
             case '7':
                 await showApiConfigMenu(config);
@@ -501,22 +518,22 @@ async function showServicesMenu(config) {
         printHeader();
         console.log(`  ${c.bold}${c.white}GERENCIAR SERVIÇOS${c.reset}`);
         console.log();
-        if (config.environments.length === 0) {
-            msgWarn('Nenhum ambiente configurado. Use "Auto-detectar" primeiro.');
+        if (config.services.length === 0) {
+            msgWarn('Nenhum serviço configurado. Use "Auto-detectar" primeiro.');
             await prompt('  Pressione Enter para voltar...');
             return;
         }
-        for (let i = 0; i < config.environments.length; i++) {
-            const env = config.environments[i];
-            const status = await getServiceStatus(env);
+        for (let i = 0; i < config.services.length; i++) {
+            const svc = config.services[i];
+            const status = await getServiceStatus(svc);
             const statusIcon = status.status === 'running' ? `${c.green}●${c.reset}` : `${c.red}○${c.reset}`;
             const statusText = status.status === 'running'
                 ? `${c.green}ativo${c.reset} ${c.gray}(porta ${status.port}, pid ${status.pid})${c.reset}`
                 : `${c.dim}parado${c.reset}`;
             // Mostra instância associada
-            const instance = config.instances.find(inst => inst.services.includes(env.name));
+            const instance = config.instances.find(inst => inst.services.includes(svc.name));
             const instanceTag = instance ? `${c.magenta}[${instance.displayName}]${c.reset} ` : '';
-            console.log(`     ${c.white}${i + 1}${c.reset}   ${statusIcon}  ${instanceTag}${env.displayName}  ${statusText}`);
+            console.log(`     ${c.white}${i + 1}${c.reset}   ${statusIcon}  ${instanceTag}${svc.displayName}  ${statusText}`);
         }
         console.log();
         printLine();
@@ -543,8 +560,8 @@ async function showServicesMenu(config) {
             continue;
         }
         const index = parseInt(choice, 10) - 1;
-        if (index >= 0 && index < config.environments.length) {
-            await showServiceActions(config.environments[index]);
+        if (index >= 0 && index < config.services.length) {
+            await showServiceActions(config.services[index]);
         }
     }
 }
@@ -607,18 +624,18 @@ async function showServiceActions(env) {
 }
 async function startAllServices(config) {
     console.log();
-    for (const env of config.environments.filter(e => e.enabled)) {
-        msgInfo(`Iniciando ${env.displayName}...`);
-        const result = await startService(env);
+    for (const svc of config.services.filter(s => s.enabled)) {
+        msgInfo(`Iniciando ${svc.displayName}...`);
+        const result = await startService(svc);
         result.success ? msgOk(result.message) : msgFail(result.message);
     }
     await prompt('  Pressione Enter para continuar...');
 }
 async function stopAllServices(config) {
     console.log();
-    for (const env of config.environments.filter(e => e.enabled)) {
-        msgInfo(`Parando ${env.displayName}...`);
-        const result = await stopService(env);
+    for (const svc of config.services.filter(s => s.enabled)) {
+        msgInfo(`Parando ${svc.displayName}...`);
+        const result = await stopService(svc);
         result.success ? msgOk(result.message) : msgFail(result.message);
     }
     await prompt('  Pressione Enter para continuar...');
@@ -627,34 +644,34 @@ async function showStatusMenu(config) {
     printHeader();
     console.log(`  ${c.bold}${c.white}STATUS DOS SERVIÇOS${c.reset}`);
     console.log();
-    if (config.environments.length === 0) {
-        msgWarn('Nenhum ambiente configurado.');
+    if (config.services.length === 0) {
+        msgWarn('Nenhum serviço configurado.');
         await prompt('  Pressione Enter para voltar...');
         return;
     }
     let running = 0;
     let stopped = 0;
-    for (const env of config.environments) {
-        const status = await getServiceStatus(env);
+    for (const svc of config.services) {
+        const status = await getServiceStatus(svc);
         if (status.status === 'running') {
             running++;
-            console.log(`  ${c.green}●${c.reset}  ${env.displayName.padEnd(25)} ${c.gray}porta${c.reset} ${String(status.port).padEnd(5)} ${c.green}ativo${c.reset} ${c.gray}pid${c.reset} ${status.pid}`);
+            console.log(`  ${c.green}●${c.reset}  ${svc.displayName.padEnd(25)} ${c.gray}porta${c.reset} ${String(status.port).padEnd(5)} ${c.green}ativo${c.reset} ${c.gray}pid${c.reset} ${status.pid}`);
         }
         else {
             stopped++;
-            console.log(`  ${c.red}○${c.reset}  ${c.dim}${env.displayName.padEnd(25)} porta ${String(status.port || '-').padEnd(5)} parado${c.reset}`);
+            console.log(`  ${c.red}○${c.reset}  ${c.dim}${svc.displayName.padEnd(25)} porta ${String(status.port || '-').padEnd(5)} parado${c.reset}`);
         }
     }
     console.log();
     printLine();
-    if (running === config.environments.length) {
-        console.log(`  ${c.green}✓${c.reset} Todos os serviços ativos ${c.gray}(${running}/${config.environments.length})${c.reset}`);
+    if (running === config.services.length) {
+        console.log(`  ${c.green}✓${c.reset} Todos os serviços ativos ${c.gray}(${running}/${config.services.length})${c.reset}`);
     }
     else if (running === 0) {
-        console.log(`  ${c.red}✗${c.reset} Todos os serviços parados ${c.gray}(${running}/${config.environments.length})${c.reset}`);
+        console.log(`  ${c.red}✗${c.reset} Todos os serviços parados ${c.gray}(${running}/${config.services.length})${c.reset}`);
     }
     else {
-        console.log(`  ${c.yellow}⚠${c.reset} Parcial ${c.gray}(${running}/${config.environments.length} ativos)${c.reset}`);
+        console.log(`  ${c.yellow}⚠${c.reset} Parcial ${c.gray}(${running}/${config.services.length} ativos)${c.reset}`);
     }
     console.log();
     await prompt('  Pressione Enter para voltar...');
@@ -679,9 +696,9 @@ async function showInstancesMenu(config) {
                 // Conta serviços ativos
                 let runningCount = 0;
                 for (const svcName of inst.services) {
-                    const env = config.environments.find(e => e.name === svcName);
-                    if (env) {
-                        const status = await getServiceStatus(env);
+                    const svc = config.services.find(s => s.name === svcName);
+                    if (svc) {
+                        const status = await getServiceStatus(svc);
                         if (status.status === 'running')
                             runningCount++;
                     }
@@ -756,33 +773,81 @@ async function showInstanceDetails(config, index) {
     while (true) {
         printHeader();
         const inst = config.instances[index];
+        if (!inst)
+            return; // Proteção caso tenha sido removida
         const typeColor = inst.type === 'DESENVOLVIMENTO' ? c.green : inst.type === 'QA' ? c.yellow : c.red;
         const typeLabel = inst.type === 'DESENVOLVIMENTO' ? 'DEV' : inst.type;
-        console.log(`  ${c.bold}${c.white}${inst.displayName}${c.reset}`);
-        console.log(`  ${typeColor}[${typeLabel}]${c.reset} ${c.dim}${inst.description || ''}${c.reset}`);
+        console.log(`  ${c.bold}${c.white}${inst.displayName}${c.reset}  ${typeColor}[${typeLabel}]${c.reset}`);
+        if (inst.description) {
+            console.log(`  ${c.dim}${inst.description}${c.reset}`);
+        }
         console.log();
+        // ── Serviços com status detalhado ──
         if (inst.services.length === 0) {
             msgWarn('Nenhum serviço associado a esta instância.');
         }
         else {
-            console.log(`  ${c.bold}Serviços:${c.reset}`);
+            console.log(`  ${c.bold}${c.white}SERVIÇOS${c.reset}  ${c.dim}(${inst.services.length})${c.reset}`);
+            console.log();
+            let runningCount = 0;
             for (const svcName of inst.services) {
-                const env = config.environments.find(e => e.name === svcName);
-                if (env) {
-                    const status = await getServiceStatus(env);
-                    const statusIcon = status.status === 'running' ? `${c.green}●${c.reset}` : `${c.red}○${c.reset}`;
-                    console.log(`     ${statusIcon}  ${env.displayName}`);
+                const svc = config.services.find(s => s.name === svcName);
+                if (!svc) {
+                    console.log(`     ${c.dim}○  ${svcName} ${c.red}(não encontrado)${c.reset}`);
+                    continue;
                 }
+                const status = await getServiceStatus(svc);
+                if (status.status === 'running') {
+                    runningCount++;
+                    const portStr = status.port ? `porta ${c.cyan}${status.port}${c.reset}` : '';
+                    const pidStr = status.pid ? `pid ${c.cyan}${status.pid}${c.reset}` : '';
+                    const memStr = status.memory ? `${c.cyan}${status.memory}MB${c.reset}` : '';
+                    const details = [portStr, pidStr, memStr].filter(Boolean).join('  ');
+                    console.log(`     ${c.green}●${c.reset}  ${svc.displayName}  ${c.dim}(${svc.type})${c.reset}`);
+                    console.log(`        ${details}`);
+                }
+                else {
+                    const portStr = status.port ? `porta ${status.port}` : 'sem porta';
+                    console.log(`     ${c.red}○${c.reset}  ${c.dim}${svc.displayName}  (${svc.type})  ${portStr}${c.reset}`);
+                }
+            }
+            console.log();
+            // Resumo inline
+            if (runningCount === inst.services.length) {
+                console.log(`  ${c.green}✓${c.reset} Todos os serviços ativos`);
+            }
+            else if (runningCount > 0) {
+                console.log(`  ${c.yellow}⚠${c.reset} ${runningCount}/${inst.services.length} ativo(s)`);
+            }
+            else {
+                console.log(`  ${c.red}✗${c.reset} Todos os serviços parados`);
+            }
+        }
+        // ── Ambientes INI (prévia rápida) ──
+        const appSvcs = inst.services
+            .map(name => config.services.find(s => s.name === name))
+            .filter((s) => !!s && (s.type === 'appserver' || s.type === 'rest'));
+        if (appSvcs.length > 0) {
+            let totalEnvs = 0;
+            for (const svc of appSvcs) {
+                totalEnvs += extractEnvironmentsFromIni(svc.iniPath).length;
+            }
+            if (totalEnvs > 0) {
+                console.log(`  ${c.dim}📋 ${totalEnvs} ambiente(s) INI disponíveis${c.reset}`);
             }
         }
         console.log();
         printLine();
+        console.log(`     ${c.white}S${c.reset}   ${c.green}▶ Iniciar todos${c.reset}`);
+        console.log(`     ${c.white}P${c.reset}   ${c.red}■ Parar todos${c.reset}`);
+        console.log(`     ${c.white}R${c.reset}   ${c.yellow}↻ Reiniciar todos${c.reset}`);
+        printLine();
         console.log(`     ${c.white}A${c.reset}   ${c.cyan}Associar serviço${c.reset}`);
-        console.log(`     ${c.white}R${c.reset}   ${c.red}Remover serviço${c.reset}`);
-        console.log(`     ${c.white}S${c.reset}   ${c.green}Iniciar todos${c.reset}`);
-        console.log(`     ${c.white}P${c.reset}   ${c.red}Parar todos${c.reset}`);
-        console.log(`     ${c.white}E${c.reset}   ${c.yellow}Editar${c.reset}`);
+        console.log(`     ${c.white}X${c.reset}   ${c.red}Remover serviço${c.reset}`);
+        console.log(`     ${c.white}E${c.reset}   ${c.yellow}Editar instância${c.reset}`);
         console.log(`     ${c.white}D${c.reset}   ${c.red}Excluir instância${c.reset}`);
+        printLine();
+        console.log(`     ${c.white}I${c.reset}   ${c.cyan}Ver Ambientes INI${c.reset}          ${c.dim}Seções [ENV] dos serviços desta instância${c.reset}`);
         console.log(`     ${c.white}0${c.reset}   ${c.dim}Voltar${c.reset}`);
         console.log();
         const choice = await prompt(`  Selecione: `);
@@ -792,7 +857,7 @@ async function showInstanceDetails(config, index) {
             case 'a':
                 await addServiceToInstance(config, inst);
                 break;
-            case 'r':
+            case 'x':
                 await removeServiceFromInstance(config, inst);
                 break;
             case 's':
@@ -801,18 +866,25 @@ async function showInstanceDetails(config, index) {
             case 'p':
                 await stopInstanceServices(config, inst);
                 break;
+            case 'r':
+                await restartInstanceServices(config, inst);
+                break;
             case 'e':
                 await editInstance(config, inst);
                 break;
-            case 'd':
-                const confirm = await prompt(`  ${c.red}Confirma exclusão? (s/n):${c.reset} `);
-                if (confirm.toLowerCase() === 's') {
+            case 'd': {
+                const confirmDel = await prompt(`  ${c.red}Confirma exclusão? (s/n):${c.reset} `);
+                if (confirmDel.toLowerCase() === 's') {
                     config.instances.splice(index, 1);
                     saveConfig(config);
                     msgOk('Instância excluída');
                     await prompt('  Pressione Enter para continuar...');
                     return;
                 }
+                break;
+            }
+            case 'i':
+                await showInstanceIniEnvironments(config, inst);
                 break;
         }
     }
@@ -822,7 +894,7 @@ async function addServiceToInstance(config, inst) {
     console.log(`  ${c.bold}${c.white}ASSOCIAR SERVIÇO${c.reset}`);
     console.log(`  ${c.gray}Instância: ${inst.displayName}${c.reset}`);
     console.log();
-    const availableServices = config.environments.filter(e => !inst.services.includes(e.name));
+    const availableServices = config.services.filter(s => !inst.services.includes(s.name));
     if (availableServices.length === 0) {
         msgWarn('Todos os serviços já estão associados a esta instância.');
         await prompt('  Pressione Enter para voltar...');
@@ -858,8 +930,8 @@ async function removeServiceFromInstance(config, inst) {
     }
     console.log(`  Serviços associados:`);
     for (let i = 0; i < inst.services.length; i++) {
-        const env = config.environments.find(e => e.name === inst.services[i]);
-        const name = env?.displayName || inst.services[i];
+        const svc = config.services.find(s => s.name === inst.services[i]);
+        const name = svc?.displayName || inst.services[i];
         console.log(`     ${c.white}${i + 1}${c.reset}   ${name}`);
     }
     console.log();
@@ -878,10 +950,10 @@ async function removeServiceFromInstance(config, inst) {
 async function startInstanceServices(config, inst) {
     console.log();
     for (const svcName of inst.services) {
-        const env = config.environments.find(e => e.name === svcName);
-        if (env) {
-            msgInfo(`Iniciando ${env.displayName}...`);
-            const result = await startService(env);
+        const svc = config.services.find(s => s.name === svcName);
+        if (svc) {
+            msgInfo(`Iniciando ${svc.displayName}...`);
+            const result = await startService(svc);
             result.success ? msgOk(result.message) : msgFail(result.message);
         }
     }
@@ -890,10 +962,36 @@ async function startInstanceServices(config, inst) {
 async function stopInstanceServices(config, inst) {
     console.log();
     for (const svcName of inst.services) {
-        const env = config.environments.find(e => e.name === svcName);
-        if (env) {
-            msgInfo(`Parando ${env.displayName}...`);
-            const result = await stopService(env);
+        const svc = config.services.find(s => s.name === svcName);
+        if (svc) {
+            msgInfo(`Parando ${svc.displayName}...`);
+            const result = await stopService(svc);
+            result.success ? msgOk(result.message) : msgFail(result.message);
+        }
+    }
+    await prompt('  Pressione Enter para continuar...');
+}
+async function restartInstanceServices(config, inst) {
+    console.log();
+    msgInfo('Parando serviços...');
+    for (const svcName of inst.services) {
+        const svc = config.services.find(s => s.name === svcName);
+        if (svc) {
+            msgInfo(`Parando ${svc.displayName}...`);
+            const result = await stopService(svc);
+            result.success ? msgOk(result.message) : msgFail(result.message);
+        }
+    }
+    console.log();
+    msgInfo('Aguardando 2 segundos...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log();
+    msgInfo('Iniciando serviços...');
+    for (const svcName of inst.services) {
+        const svc = config.services.find(s => s.name === svcName);
+        if (svc) {
+            msgInfo(`Iniciando ${svc.displayName}...`);
+            const result = await startService(svc);
             result.success ? msgOk(result.message) : msgFail(result.message);
         }
     }
@@ -926,29 +1024,109 @@ async function editInstance(config, inst) {
     await prompt('  Pressione Enter para continuar...');
 }
 // ============================================================================
-// INI ENVIRONMENTS MENU
+// INI ENVIRONMENTS MENU (AMBIENTES)
 // ============================================================================
+/**
+ * Exibe ambientes INI agrupados por Instância → Serviço
+ * Ambientes = seções [ENV] do appserver.ini com SourcePath + RootPath
+ */
 async function showIniEnvironmentsMenu(config) {
     printHeader();
-    console.log(`  ${c.bold}${c.white}ENVIRONMENTS DOS INIS${c.reset}`);
+    console.log(`  ${c.bold}${c.white}AMBIENTES INI${c.reset}`);
     console.log(`  ${c.gray}Seções [ENVIRONMENT] configuradas nos arquivos appserver.ini${c.reset}`);
     console.log();
-    const appservers = config.environments.filter(e => e.type === 'appserver' || e.type === 'rest');
+    const appservers = config.services.filter(s => s.type === 'appserver' || s.type === 'rest');
     if (appservers.length === 0) {
-        msgWarn('Nenhum AppServer configurado.');
+        msgWarn('Nenhum AppServer/REST configurado.');
         await prompt('  Pressione Enter para voltar...');
         return;
     }
-    for (const env of appservers) {
-        console.log(`  ${c.bold}${c.cyan}${env.displayName}${c.reset}`);
-        console.log(`  ${c.dim}${env.iniPath}${c.reset}`);
+    // Agrupa por instância
+    const instanceGroups = new Map();
+    // Serviços com instância
+    for (const inst of config.instances) {
+        const instServices = appservers.filter(svc => inst.services.includes(svc.name));
+        if (instServices.length > 0) {
+            instanceGroups.set(inst.id, { instance: inst, services: instServices });
+        }
+    }
+    // Serviços sem instância ("avulsos")
+    const assignedNames = new Set(config.instances.flatMap(inst => inst.services));
+    const unassigned = appservers.filter(svc => !assignedNames.has(svc.name));
+    if (unassigned.length > 0) {
+        instanceGroups.set('__unassigned__', { instance: null, services: unassigned });
+    }
+    let totalEnvs = 0;
+    for (const [, group] of instanceGroups) {
+        if (group.instance) {
+            const typeColor = group.instance.type === 'DESENVOLVIMENTO' ? c.green : group.instance.type === 'QA' ? c.yellow : c.red;
+            const typeLabel = group.instance.type === 'DESENVOLVIMENTO' ? 'DEV' : group.instance.type;
+            console.log(`  ${c.bold}${c.white}INSTÂNCIA: ${group.instance.displayName}${c.reset}  ${typeColor}[${typeLabel}]${c.reset}`);
+        }
+        else {
+            console.log(`  ${c.bold}${c.dim}SERVIÇOS SEM INSTÂNCIA${c.reset}`);
+        }
         console.log();
-        const environments = extractEnvironmentsFromIni(env.iniPath);
+        for (const svc of group.services) {
+            console.log(`  ${c.cyan}└─ ${svc.displayName}${c.reset}  ${c.dim}(${svc.iniPath})${c.reset}`);
+            console.log();
+            const environments = extractEnvironmentsFromIni(svc.iniPath);
+            if (environments.length === 0) {
+                console.log(`     ${c.dim}Nenhum ambiente encontrado${c.reset}`);
+            }
+            else {
+                for (const iniEnv of environments) {
+                    totalEnvs++;
+                    console.log(`     ${c.magenta}[${iniEnv.name}]${c.reset}`);
+                    console.log(`        SourcePath: ${c.cyan}${iniEnv.sourcePath}${c.reset}`);
+                    console.log(`        RootPath:   ${c.cyan}${iniEnv.rootPath}${c.reset}`);
+                    if (iniEnv.rpoCustom)
+                        console.log(`        RPOCustom:  ${c.cyan}${iniEnv.rpoCustom}${c.reset}`);
+                    if (iniEnv.dbAlias)
+                        console.log(`        DBAlias:    ${c.cyan}${iniEnv.dbAlias}${c.reset}`);
+                    if (iniEnv.dbServer)
+                        console.log(`        DBServer:   ${c.cyan}${iniEnv.dbServer}:${iniEnv.dbPort || ''}${c.reset}`);
+                    console.log();
+                }
+            }
+        }
+        printLine();
+        console.log();
+    }
+    console.log(`  ${c.dim}Total: ${totalEnvs} ambiente(s) encontrado(s)${c.reset}`);
+    console.log();
+    await prompt('  Pressione Enter para voltar...');
+}
+/**
+ * Exibe ambientes INI apenas de uma instância específica
+ * Chamado a partir do menu de detalhes da instância
+ */
+async function showInstanceIniEnvironments(config, inst) {
+    printHeader();
+    const typeColor = inst.type === 'DESENVOLVIMENTO' ? c.green : inst.type === 'QA' ? c.yellow : c.red;
+    const typeLabel = inst.type === 'DESENVOLVIMENTO' ? 'DEV' : inst.type;
+    console.log(`  ${c.bold}${c.white}AMBIENTES INI${c.reset}`);
+    console.log(`  ${c.gray}Instância:${c.reset} ${inst.displayName} ${typeColor}[${typeLabel}]${c.reset}`);
+    console.log();
+    const appSvcs = inst.services
+        .map(name => config.services.find(s => s.name === name))
+        .filter((s) => !!s && (s.type === 'appserver' || s.type === 'rest'));
+    if (appSvcs.length === 0) {
+        msgWarn('Nenhum AppServer/REST associado a esta instância.');
+        await prompt('  Pressione Enter para voltar...');
+        return;
+    }
+    let totalEnvs = 0;
+    for (const svc of appSvcs) {
+        console.log(`  ${c.cyan}└─ ${svc.displayName}${c.reset}  ${c.dim}(${svc.iniPath})${c.reset}`);
+        console.log();
+        const environments = extractEnvironmentsFromIni(svc.iniPath);
         if (environments.length === 0) {
-            console.log(`     ${c.dim}Nenhum environment encontrado${c.reset}`);
+            console.log(`     ${c.dim}Nenhum ambiente encontrado${c.reset}`);
         }
         else {
             for (const iniEnv of environments) {
+                totalEnvs++;
                 console.log(`     ${c.magenta}[${iniEnv.name}]${c.reset}`);
                 console.log(`        SourcePath: ${c.cyan}${iniEnv.sourcePath}${c.reset}`);
                 console.log(`        RootPath:   ${c.cyan}${iniEnv.rootPath}${c.reset}`);
@@ -964,25 +1142,27 @@ async function showIniEnvironmentsMenu(config) {
         printLine();
         console.log();
     }
+    console.log(`  ${c.dim}Total: ${totalEnvs} ambiente(s) encontrado(s)${c.reset}`);
+    console.log();
     await prompt('  Pressione Enter para voltar...');
 }
 // ============================================================================
 // OTHER MENUS (environments, auto-detect, api config, daemon)
 // ============================================================================
-async function showEnvironmentsMenu(config) {
+async function showServicesConfigMenu(config) {
     while (true) {
         printHeader();
-        console.log(`  ${c.bold}${c.white}AMBIENTES CONFIGURADOS${c.reset}`);
+        console.log(`  ${c.bold}${c.white}SERVIÇOS CONFIGURADOS${c.reset}`);
         console.log();
-        if (config.environments.length === 0) {
-            msgWarn('Nenhum ambiente configurado.');
+        if (config.services.length === 0) {
+            msgWarn('Nenhum serviço configurado.');
         }
         else {
-            for (let i = 0; i < config.environments.length; i++) {
-                const env = config.environments[i];
-                const status = env.enabled ? `${c.green}✓${c.reset}` : `${c.dim}○${c.reset}`;
-                console.log(`     ${c.white}${i + 1}${c.reset}   ${status}  ${env.displayName} ${c.gray}(${env.type})${c.reset}`);
-                console.log(`         ${c.dim}${env.rootPath}${c.reset}`);
+            for (let i = 0; i < config.services.length; i++) {
+                const svc = config.services[i];
+                const status = svc.enabled ? `${c.green}✓${c.reset}` : `${c.dim}○${c.reset}`;
+                console.log(`     ${c.white}${i + 1}${c.reset}   ${status}  ${svc.displayName} ${c.gray}(${svc.type})${c.reset}`);
+                console.log(`         ${c.dim}${svc.rootPath}${c.reset}`);
             }
         }
         console.log();
@@ -995,7 +1175,7 @@ async function showEnvironmentsMenu(config) {
         if (choice === '0' || choice === '')
             return;
         if (choice.toLowerCase() === 'a') {
-            await addEnvironmentManually(config);
+            await addServiceManually(config);
             continue;
         }
         if (choice.toLowerCase() === 'd') {
@@ -1003,14 +1183,14 @@ async function showEnvironmentsMenu(config) {
             continue;
         }
         const index = parseInt(choice, 10) - 1;
-        if (index >= 0 && index < config.environments.length) {
-            await editEnvironment(config, index);
+        if (index >= 0 && index < config.services.length) {
+            await editServiceConfig(config, index);
         }
     }
 }
-async function addEnvironmentManually(config) {
+async function addServiceManually(config) {
     printHeader();
-    console.log(`  ${c.bold}${c.white}ADICIONAR AMBIENTE${c.reset}`);
+    console.log(`  ${c.bold}${c.white}ADICIONAR SERVIÇO${c.reset}`);
     console.log();
     const name = await prompt(`  Nome (identificador): `);
     if (!name)
@@ -1038,7 +1218,7 @@ async function addEnvironmentManually(config) {
     };
     const type = types[typeChoice] || 'appserver';
     const now = new Date().toISOString();
-    config.environments.push({
+    config.services.push({
         id: crypto.randomUUID(),
         name: name.toLowerCase().replace(/\s+/g, '-'),
         displayName: displayName || name,
@@ -1050,42 +1230,43 @@ async function addEnvironmentManually(config) {
         updatedAt: now,
     });
     saveConfig(config);
-    msgOk('Ambiente adicionado com sucesso!');
+    msgOk('Serviço adicionado com sucesso!');
     await prompt('  Pressione Enter para continuar...');
 }
-async function editEnvironment(config, index) {
-    const env = config.environments[index];
+async function editServiceConfig(config, index) {
+    const svc = config.services[index];
     printHeader();
-    console.log(`  ${c.bold}${c.white}EDITAR: ${env.displayName}${c.reset}`);
+    console.log(`  ${c.bold}${c.white}EDITAR: ${svc.displayName}${c.reset}`);
     console.log();
-    console.log(`  ${c.gray}${env.rootPath}${c.reset}`);
+    console.log(`  ${c.gray}${svc.rootPath}${c.reset}`);
     console.log();
     printLine();
-    console.log(`     ${c.white}1${c.reset}   ${env.enabled ? 'Desativar' : 'Ativar'}`);
+    console.log(`     ${c.white}1${c.reset}   ${svc.enabled ? 'Desativar' : 'Ativar'}`);
     console.log(`     ${c.white}2${c.reset}   ${c.red}Remover${c.reset}`);
     console.log(`     ${c.white}0${c.reset}   ${c.dim}Voltar${c.reset}`);
     console.log();
     const choice = await prompt(`  Selecione: `);
     if (choice === '1') {
-        env.enabled = !env.enabled;
-        env.updatedAt = new Date().toISOString();
+        svc.enabled = !svc.enabled;
+        svc.updatedAt = new Date().toISOString();
         saveConfig(config);
-        msgOk(env.enabled ? 'Ambiente ativado' : 'Ambiente desativado');
+        msgOk(svc.enabled ? 'Serviço ativado' : 'Serviço desativado');
         await prompt('  Pressione Enter para continuar...');
     }
     if (choice === '2') {
         const confirm = await prompt(`  Confirma remoção? (s/n): `);
         if (confirm.toLowerCase() === 's') {
-            config.environments.splice(index, 1);
+            config.services.splice(index, 1);
             saveConfig(config);
-            msgOk('Ambiente removido');
+            msgOk('Serviço removido');
             await prompt('  Pressione Enter para continuar...');
         }
     }
 }
 async function runAutoDetect(config) {
     printHeader();
-    console.log(`  ${c.bold}${c.white}AUTO-DETECTAR AMBIENTES${c.reset}`);
+    console.log(`  ${c.bold}${c.white}AUTO-DETECTAR SERVIÇOS${c.reset}`);
+    console.log(`  ${c.gray}Escaneia diretórios em busca de AppServers, DBAccess e License Servers${c.reset}`);
     console.log();
     msgInfo('Diretórios para escanear:');
     for (const p of config.scanPaths) {
@@ -1094,7 +1275,6 @@ async function runAutoDetect(config) {
     console.log();
     const addPath = await prompt(`  Adicionar outro diretório (ou Enter para continuar): `);
     if (addPath && fs.existsSync(addPath)) {
-        // Evita adicionar path duplicado ou já contido em outro
         const normalizedPath = path.resolve(addPath);
         const alreadyExists = config.scanPaths.some(p => path.resolve(p) === normalizedPath ||
             normalizedPath.startsWith(path.resolve(p) + path.sep));
@@ -1113,7 +1293,6 @@ async function runAutoDetect(config) {
     for (const scanPath of config.scanPaths) {
         if (fs.existsSync(scanPath)) {
             const r = scanDirectory(scanPath);
-            // Evita duplicatas baseado no rootPath
             for (const app of r.appservers) {
                 if (!seenPaths.has(app.rootPath)) {
                     seenPaths.add(app.rootPath);
@@ -1151,7 +1330,9 @@ async function runAutoDetect(config) {
     for (let i = 0; i < allComponents.length; i++) {
         const comp = allComponents[i];
         const icon = comp.type === 'appserver' ? '🖥️' : comp.type === 'dbaccess' ? '🗄️' : '🔑';
-        console.log(`     ${c.white}${i + 1}${c.reset}   ${icon}  ${comp.displayName}`);
+        const alreadyExists = config.services.some(s => s.rootPath === comp.rootPath);
+        const existsTag = alreadyExists ? ` ${c.yellow}(já configurado)${c.reset}` : '';
+        console.log(`     ${c.white}${i + 1}${c.reset}   ${icon}  ${comp.displayName}${existsTag}`);
         console.log(`         ${c.dim}${comp.rootPath}${c.reset}`);
     }
     console.log();
@@ -1168,16 +1349,55 @@ async function runAutoDetect(config) {
             .filter(i => i >= 0 && i < allComponents.length)
             .map(i => allComponents[i]);
     }
-    for (const env of toAdd) {
-        if (!config.environments.some(e => e.rootPath === env.rootPath)) {
-            config.environments.push(env);
-            msgOk(`Adicionado: ${env.displayName}`);
+    let addedCount = 0;
+    for (const svc of toAdd) {
+        if (!config.services.some(s => s.rootPath === svc.rootPath)) {
+            config.services.push(svc);
+            msgOk(`Adicionado: ${svc.displayName}`);
+            addedCount++;
         }
         else {
-            msgSkip(`Já existe: ${env.displayName}`);
+            msgSkip(`Já existe: ${svc.displayName}`);
         }
     }
     saveConfig(config);
+    // ── Associar a instância ──
+    if (addedCount > 0 && config.instances.length > 0) {
+        console.log();
+        printLine();
+        console.log();
+        console.log(`  ${c.bold}${c.white}ASSOCIAR A UMA INSTÂNCIA?${c.reset}`);
+        console.log(`  ${c.gray}Os serviços adicionados podem ser associados a uma instância existente.${c.reset}`);
+        console.log();
+        for (let i = 0; i < config.instances.length; i++) {
+            const inst = config.instances[i];
+            const typeColor = inst.type === 'DESENVOLVIMENTO' ? c.green : inst.type === 'QA' ? c.yellow : c.red;
+            const typeLabel = inst.type === 'DESENVOLVIMENTO' ? 'DEV' : inst.type;
+            console.log(`     ${c.white}${i + 1}${c.reset}   ${typeColor}[${typeLabel}]${c.reset} ${inst.displayName}  ${c.dim}(${inst.services.length} serviço(s))${c.reset}`);
+        }
+        console.log(`     ${c.white}0${c.reset}   ${c.dim}Pular (sem instância por agora)${c.reset}`);
+        console.log();
+        const instChoice = await prompt(`  Associar a: `);
+        if (instChoice && instChoice !== '0') {
+            const instIndex = parseInt(instChoice, 10) - 1;
+            if (instIndex >= 0 && instIndex < config.instances.length) {
+                const inst = config.instances[instIndex];
+                // Adiciona os serviços recém-adicionados à instância
+                for (const svc of toAdd) {
+                    if (!inst.services.includes(svc.name) && config.services.some(s => s.rootPath === svc.rootPath)) {
+                        inst.services.push(svc.name);
+                    }
+                }
+                inst.updatedAt = new Date().toISOString();
+                saveConfig(config);
+                msgOk(`Serviços associados à instância "${inst.displayName}"`);
+            }
+        }
+    }
+    else if (addedCount > 0 && config.instances.length === 0) {
+        console.log();
+        msgInfo('Dica: Crie uma instância no menu "Instâncias Protheus" para agrupar seus serviços.');
+    }
     await prompt('  Pressione Enter para continuar...');
 }
 async function showApiConfigMenu(config) {
@@ -1592,13 +1812,13 @@ async function main() {
                 break;
             case 'start':
                 if (args[1]) {
-                    const env = config.environments.find(e => e.name === args[1]);
-                    if (env) {
-                        const result = await startService(env);
+                    const svc = config.services.find(s => s.name === args[1]);
+                    if (svc) {
+                        const result = await startService(svc);
                         result.success ? msgOk(result.message) : msgFail(result.message);
                     }
                     else {
-                        msgFail(`Ambiente não encontrado: ${args[1]}`);
+                        msgFail(`Serviço não encontrado: ${args[1]}`);
                     }
                 }
                 else {
@@ -1608,13 +1828,13 @@ async function main() {
                 break;
             case 'stop':
                 if (args[1]) {
-                    const env = config.environments.find(e => e.name === args[1]);
-                    if (env) {
-                        const result = await stopService(env);
+                    const svc = config.services.find(s => s.name === args[1]);
+                    if (svc) {
+                        const result = await stopService(svc);
                         result.success ? msgOk(result.message) : msgFail(result.message);
                     }
                     else {
-                        msgFail(`Ambiente não encontrado: ${args[1]}`);
+                        msgFail(`Serviço não encontrado: ${args[1]}`);
                     }
                 }
                 else {
@@ -1626,9 +1846,18 @@ async function main() {
                 await showInstancesMenu(config);
                 close();
                 break;
+            case 'services':
+                await showServicesMenu(config);
+                close();
+                break;
             case 'environments':
             case 'envs':
                 await showIniEnvironmentsMenu(config);
+                close();
+                break;
+            case 'scan':
+            case 'detect':
+                await runAutoDetect(config);
                 close();
                 break;
             case 'webhooks':
@@ -1638,6 +1867,7 @@ async function main() {
             case 'help':
                 console.log(`
 ${c.bold}Ncloud Agent CLI${c.reset} v${VERSION}
+${c.dim}Hierarquia: Servidor → Instância → Serviço → Ambiente${c.reset}
 
 ${c.bold}Uso:${c.reset}
   ncloud-agent                # Menu interativo
@@ -1645,7 +1875,9 @@ ${c.bold}Uso:${c.reset}
   ncloud-agent start [nome]   # Iniciar serviço(s)
   ncloud-agent stop [nome]    # Parar serviço(s)
   ncloud-agent instances      # Gerenciar instâncias
-  ncloud-agent envs           # Ver environments dos INIs
+  ncloud-agent services       # Gerenciar serviços
+  ncloud-agent envs           # Ver ambientes dos INIs
+  ncloud-agent scan           # Auto-detectar serviços
   ncloud-agent webhooks       # Gerenciar webhooks
   ncloud-agent help           # Esta ajuda
 `);

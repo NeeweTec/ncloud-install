@@ -4,6 +4,11 @@
  *
  * Gerenciador de configuração com sincronização automática
  * entre memória e disco para resolver problemas de cache.
+ *
+ * v1.4.0 — Hierarquia: Servidor → Instância → Serviço → Ambiente
+ *   - Renomeado: Environment → Service (o que era "environment" é um Serviço Protheus)
+ *   - Campo config: environments[] → services[] (com migração automática do legado)
+ *   - Ambientes INI (seções [ENV]) são extraídos dinamicamente, não persistidos aqui
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -72,7 +77,7 @@ exports.CONFIG_FILE = CONFIG_FILE;
 const DEFAULT_CONFIG = {
     server: { port: 3100, host: '0.0.0.0' },
     auth: { token: 'NcloudAgent2026SecureToken32Ch' },
-    environments: [],
+    services: [],
     instances: [],
     webhooks: [],
     monitor: {
@@ -152,9 +157,13 @@ class DaemonConfigStore extends events_1.EventEmitter {
                 const data = fs.readFileSync(this.configPath, 'utf-8');
                 const loaded = JSON.parse(data);
                 console.log(`📁 Configuração carregada de: ${this.configPath}`);
-                // Migra environments antigos que não têm ID
-                const environments = this.migrateEnvironments(loaded.environments || []);
-                const needsMigration = environments.some((env, i) => !loaded.environments?.[i]?.id || !loaded.environments?.[i]?.createdAt);
+                // ── Migração v1.4.0: environments[] → services[] ──────────────────
+                // Lê o campo novo (services) ou o legado (environments) como fallback
+                const rawServices = loaded.services ?? loaded.environments ?? [];
+                const hadLegacyField = !loaded.services && Array.isArray(loaded.environments) && loaded.environments.length > 0;
+                // Migra serviços antigos que não têm ID
+                const services = this.migrateServices(rawServices);
+                const needsIdMigration = services.some((svc, i) => !rawServices?.[i]?.id || !rawServices?.[i]?.createdAt);
                 // CRÍTICO: Preserva o token do arquivo - NUNCA usar default se existir token no arquivo
                 const fileToken = loaded.auth?.token;
                 const fileTokenHash = loaded.auth?.tokenHash;
@@ -174,17 +183,24 @@ class DaemonConfigStore extends events_1.EventEmitter {
                     ...loaded,
                     auth, // Usa SEMPRE o token do arquivo (ou novo gerado)
                     instances: loaded.instances || [],
-                    environments,
+                    services,
                     webhooks: loaded.webhooks || [],
                     monitor: { ...DEFAULT_CONFIG.monitor, ...loaded.monitor },
                 };
+                // Remove o campo legado 'environments' se existia (agora usamos 'services')
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                delete config.environments;
                 // Salva automaticamente se houve migração OU se gerou novo token
-                if ((needsMigration && environments.length > 0) || !fileToken) {
+                const needsMigration = hadLegacyField || (needsIdMigration && services.length > 0) || !fileToken;
+                if (needsMigration) {
+                    if (hadLegacyField) {
+                        console.log(`🔄 Migração v1.4.0: environments[] → services[] (${services.length} serviço(s))`);
+                    }
                     if (!fileToken) {
                         console.log(`🔑 Novo token gerado automaticamente`);
                     }
-                    if (needsMigration && environments.length > 0) {
-                        console.log(`🔄 Migrando ${environments.length} environment(s) para novo formato com ID`);
+                    if (needsIdMigration && services.length > 0) {
+                        console.log(`🔄 Migrando ${services.length} serviço(s) para novo formato com ID`);
                     }
                     this.isDirty = true;
                 }
@@ -222,22 +238,23 @@ class DaemonConfigStore extends events_1.EventEmitter {
         return crypto.randomBytes(32).toString('hex');
     }
     /**
-     * Migra environments antigos para o novo formato com ID
+     * Migra serviços antigos para o novo formato com ID
+     * Compatível com dados legados do campo `environments[]`
      */
-    migrateEnvironments(environments) {
+    migrateServices(services) {
         const now = new Date().toISOString();
-        return environments.map(env => ({
-            id: env.id || generateId(),
-            name: env.name || '',
-            displayName: env.displayName || env.name || '',
-            rootPath: env.rootPath || '',
-            iniPath: env.iniPath || '',
-            enabled: env.enabled ?? true,
-            type: env.type || 'appserver',
-            port: env.port,
-            instanceId: env.instanceId,
-            createdAt: env.createdAt || now,
-            updatedAt: env.updatedAt || now,
+        return services.map(svc => ({
+            id: svc.id || generateId(),
+            name: svc.name || '',
+            displayName: svc.displayName || svc.name || '',
+            rootPath: svc.rootPath || '',
+            iniPath: svc.iniPath || '',
+            enabled: svc.enabled ?? true,
+            type: svc.type || 'appserver',
+            port: svc.port,
+            instanceId: svc.instanceId,
+            createdAt: svc.createdAt || now,
+            updatedAt: svc.updatedAt || now,
         }));
     }
     /**
@@ -372,46 +389,46 @@ class DaemonConfigStore extends events_1.EventEmitter {
         return result;
     }
     // ============================================================================
-    // MÉTODOS DE CONVENIÊNCIA PARA ENVIRONMENTS
+    // MÉTODOS DE CONVENIÊNCIA PARA SERVIÇOS (v1.4.0)
     // ============================================================================
     /**
-     * Adiciona um environment (gera ID automaticamente se não fornecido)
+     * Adiciona um serviço Protheus (gera ID automaticamente se não fornecido)
      */
-    addEnvironment(env) {
+    addService(svc) {
         const now = new Date().toISOString();
         // Verifica se já existe por nome ou rootPath
-        const exists = this.data.environments.some(e => e.name === env.name || e.rootPath === env.rootPath);
+        const exists = this.data.services.some(s => s.name === svc.name || s.rootPath === svc.rootPath);
         if (exists) {
-            throw new Error(`Environment com nome '${env.name}' ou rootPath '${env.rootPath}' já existe`);
+            throw new Error(`Serviço com nome '${svc.name}' ou rootPath '${svc.rootPath}' já existe`);
         }
-        const newEnv = {
-            id: env.id || generateId(),
-            name: env.name,
-            displayName: env.displayName,
-            rootPath: env.rootPath,
-            iniPath: env.iniPath,
-            enabled: env.enabled,
-            type: env.type,
-            port: env.port,
-            instanceId: env.instanceId,
-            createdAt: env.createdAt || now,
-            updatedAt: env.updatedAt || now,
+        const newSvc = {
+            id: svc.id || generateId(),
+            name: svc.name,
+            displayName: svc.displayName,
+            rootPath: svc.rootPath,
+            iniPath: svc.iniPath,
+            enabled: svc.enabled,
+            type: svc.type,
+            port: svc.port,
+            instanceId: svc.instanceId,
+            createdAt: svc.createdAt || now,
+            updatedAt: svc.updatedAt || now,
         };
         this.previousData = { ...this.data };
-        this.data.environments.push(newEnv);
+        this.data.services.push(newSvc);
         this.isDirty = true;
         this.emit('change', this.data, this.previousData);
         this.scheduleSave();
-        return newEnv;
+        return newSvc;
     }
     /**
-     * Remove um environment por ID ou nome
+     * Remove um serviço por ID ou nome
      */
-    removeEnvironment(idOrName) {
-        const index = this.data.environments.findIndex(e => e.id === idOrName || e.name === idOrName);
+    removeService(idOrName) {
+        const index = this.data.services.findIndex(s => s.id === idOrName || s.name === idOrName);
         if (index !== -1) {
             this.previousData = { ...this.data };
-            this.data.environments.splice(index, 1);
+            this.data.services.splice(index, 1);
             this.isDirty = true;
             this.emit('change', this.data, this.previousData);
             this.scheduleSave();
@@ -420,47 +437,62 @@ class DaemonConfigStore extends events_1.EventEmitter {
         return false;
     }
     /**
-     * Atualiza um environment por ID ou nome
+     * Atualiza um serviço por ID ou nome
      */
-    updateEnvironment(idOrName, updates) {
-        const env = this.data.environments.find(e => e.id === idOrName || e.name === idOrName);
-        if (env) {
+    updateService(idOrName, updates) {
+        const svc = this.data.services.find(s => s.id === idOrName || s.name === idOrName);
+        if (svc) {
             this.previousData = { ...this.data };
-            Object.assign(env, updates, { updatedAt: new Date().toISOString() });
+            Object.assign(svc, updates, { updatedAt: new Date().toISOString() });
             this.isDirty = true;
             this.emit('change', this.data, this.previousData);
             this.scheduleSave();
-            return env;
+            return svc;
         }
         return null;
     }
     /**
-     * Obtém um environment por ID ou nome
+     * Obtém um serviço por ID ou nome
      */
-    getEnvironment(idOrName) {
-        return this.data.environments.find(e => e.id === idOrName || e.name === idOrName);
+    getService(idOrName) {
+        return this.data.services.find(s => s.id === idOrName || s.name === idOrName);
     }
     /**
-     * Obtém um environment por ID
+     * Obtém um serviço por ID
      */
-    getEnvironmentById(id) {
-        return this.data.environments.find(e => e.id === id);
+    getServiceById(id) {
+        return this.data.services.find(s => s.id === id);
     }
     /**
-     * Obtém um environment por nome
+     * Obtém um serviço por nome
      */
-    getEnvironmentByName(name) {
-        return this.data.environments.find(e => e.name === name);
+    getServiceByName(name) {
+        return this.data.services.find(s => s.name === name);
     }
     /**
-     * Lista todos os environments
+     * Lista todos os serviços
      */
-    listEnvironments(enabledOnly = false) {
+    listServices(enabledOnly = false) {
         if (enabledOnly) {
-            return this.data.environments.filter(e => e.enabled);
+            return this.data.services.filter(s => s.enabled);
         }
-        return [...this.data.environments];
+        return [...this.data.services];
     }
+    // ── Aliases deprecated para backward compat ─────────────────────────────────
+    /** @deprecated Use `addService()` */
+    addEnvironment = this.addService.bind(this);
+    /** @deprecated Use `removeService()` */
+    removeEnvironment = this.removeService.bind(this);
+    /** @deprecated Use `updateService()` */
+    updateEnvironment = this.updateService.bind(this);
+    /** @deprecated Use `getService()` */
+    getEnvironment = this.getService.bind(this);
+    /** @deprecated Use `getServiceById()` */
+    getEnvironmentById = this.getServiceById.bind(this);
+    /** @deprecated Use `getServiceByName()` */
+    getEnvironmentByName = this.getServiceByName.bind(this);
+    /** @deprecated Use `listServices()` */
+    listEnvironments = this.listServices.bind(this);
     // ============================================================================
     // MÉTODOS DE CONVENIÊNCIA PARA INSTANCES
     // ============================================================================

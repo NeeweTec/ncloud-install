@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://get.neewecloud.com"><img src="https://img.shields.io/badge/version-1.3.0-blue?style=flat-square" alt="Version"></a>
+  <a href="https://get.neewecloud.com"><img src="https://img.shields.io/badge/version-1.4.0-blue?style=flat-square" alt="Version"></a>
   <a href="#"><img src="https://img.shields.io/badge/platform-linux-success?style=flat-square" alt="Platform"></a>
   <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square" alt="Node"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square" alt="License"></a>
@@ -51,7 +51,7 @@ ncloud menu       # CLI interativo
 
 ## Funcionalidades
 
-- **Auto-discovery** — Detecta automaticamente ambientes Protheus
+- **Auto-discovery** — Detecta automaticamente serviços Protheus
 - **Monitoramento** — Status em tempo real de serviços e processos
 - **Webhooks** — Notificações automáticas de eventos
 - **API REST** — Integração com sistemas externos
@@ -75,11 +75,14 @@ ncloud menu       # CLI interativo
                       │ HTTPS
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Ncloud Agent                             │
+│                     Ncloud Agent (Servidor)                   │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
 │  │   REST API   │  │   Monitor    │  │   Webhooks   │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
 └─────────────────────┬───────────────────────────────────────┘
+                      │
+       Hierarquia v1.4.0:
+       Instância → Serviços → Ambientes INI
                       │
         ┌─────────────┼─────────────┐
         ▼             ▼             ▼

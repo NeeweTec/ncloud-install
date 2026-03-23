@@ -630,7 +630,7 @@ async function createServer() {
     // ==================== SERVICES ====================
     server.get('/services', async () => {
         const services = [];
-        for (const env of getConfig().environments.filter(e => e.enabled)) {
+        for (const env of getConfig().services.filter(e => e.enabled)) {
             services.push(await getServiceStatus(env));
         }
         return {
@@ -644,7 +644,7 @@ async function createServer() {
     });
     // Helper para buscar environment por ID ou nome
     const findEnvironment = (idOrName, enabledOnly = true) => {
-        return getConfig().environments.find(e => (e.id === idOrName || e.name === idOrName) && (!enabledOnly || e.enabled));
+        return getConfig().services.find(e => (e.id === idOrName || e.name === idOrName) && (!enabledOnly || e.enabled));
     };
     server.get('/services/:id', async (request, reply) => {
         const { id } = request.params;
@@ -856,7 +856,7 @@ async function createServer() {
     });
     // ==================== ENVIRONMENTS ====================
     server.get('/environments', async () => {
-        const envs = getConfig().environments.filter(e => e.enabled);
+        const envs = getConfig().services.filter(e => e.enabled);
         return {
             environments: envs.map(e => ({
                 id: e.id,
@@ -875,7 +875,7 @@ async function createServer() {
     });
     server.get('/environments/all', async () => {
         const result = [];
-        for (const env of getConfig().environments.filter(e => e.enabled && (e.type === 'appserver' || e.type === 'rest'))) {
+        for (const env of getConfig().services.filter(e => e.enabled && (e.type === 'appserver' || e.type === 'rest'))) {
             const envs = extractEnvironmentsFromIni(env.iniPath);
             result.push({
                 serviceName: env.name,
@@ -911,7 +911,7 @@ async function createServer() {
         const cfg = getConfig();
         return {
             server: cfg.server,
-            environments: cfg.environments.length,
+            services: cfg.services.length,
             instances: cfg.instances.length,
             scanPaths: cfg.scanPaths,
             autoStart: cfg.autoStart,
@@ -1092,7 +1092,7 @@ async function main() {
     const cfg = getConfig();
     console.log(`📁 Config: ${config_store_js_1.daemonConfigStore.getConfigPath()}`);
     console.log(`🌐 Host: ${cfg.server.host}:${cfg.server.port}`);
-    console.log(`📊 Ambientes: ${cfg.environments.length}`);
+    console.log(`📊 Serviços: ${cfg.services.length}`);
     console.log(`📦 Instâncias: ${cfg.instances.length}`);
     console.log(`🪝 Webhooks: ${cfg.webhooks.length}`);
     console.log();
@@ -1101,7 +1101,7 @@ async function main() {
     if (monitorConfig.enabled) {
         // ServiceMonitor - monitora status dos serviços em background
         serviceMonitor = index_js_1.ServiceMonitor.getInstance({
-            getEnvironments: () => getConfig().environments,
+            getEnvironments: () => getConfig().services,
         }, {
             pollIntervalMs: monitorConfig.pollIntervalMs,
             enableProcessMetrics: monitorConfig.enableProcessMetrics,
